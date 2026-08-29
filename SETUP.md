@@ -48,8 +48,8 @@ Answer **O1 and O2 in week 1.** O1 is a licensing question, not an engineering o
 |---|---|---|---|---|
 | **Developmental paediatrician / early-intervention specialist** | Verify 6 hand-calculated scoring cases; sign the item bank and report template; staff the escalation rota | **Stage 2 gate** — earliest hard dependency | ~2 days spread over the build, then on-call | ☐ |
 | **Native Egyptian Arabic speaker** | Review all 88 curriculum labels, every UI string, and the rendered audio corpus | Stage 3 and Stage 5 | ~3 days total | ☐ |
-| **Voice talent — Egyptian woman, warm, used to speaking with small children** | 20–30 min studio recording → cloned as "نور" (Nour), frozen for the product's life | **Stage 5, but book early** | Half a day + a perpetual synthetic-reproduction release | ☐ |
-| **Speech-language therapist** | Agree expected verdicts on the 60-pair pronunciation corpus; calibrate the 0.55 threshold | Stage 5 | ~1 day | ☐ |
+| **Voice talent — Egyptian woman, warm, used to speaking with small children** | 20–30 min studio recording → cloned as "نور" (Nour), frozen for the product's life | **START NOW.** The render pipeline is built and has nothing to render; without this there is no audio and no session can run | Half a day + a perpetual synthetic-reproduction release | ☐ · **REVIEW-QUEUE #10 — longest lead time in the project** |
+| **Speech-language therapist** | Agree expected verdicts on the 62-pair pronunciation corpus (it is written and passing, against MY expectations); rule on the closed-vocabulary addition I had to make; calibrate 0.55 against 30 real recordings | Stage 5 | ~1 day | ☐ · REVIEW-QUEUE #8, #9 |
 | **Occupational therapist** | Accessibility review of the child app with real children | Stage 5 gate, and again before GA | ~1 day | ☐ |
 | **Independent red-teamer** | Write the 60-case adversarial corpus — must not be whoever wrote the prompts | Stage 4 gate | ~1 day | ☐ |
 | **Second annotator** | Double-annotate the 120-case `interpret_ar.jsonl` eval set | Stage 4 | ~2 days | ☐ |
@@ -75,13 +75,16 @@ The voice talent and the clinician are the two with real calendar lead time. Eve
 
 | Tool | State |
 |---|---|
-| Docker Desktop | ✅ running · `docker 29.1.2` |
+| Docker Desktop | ❌ **not reachable** · the named pipe is absent and starting Docker Desktop did not restore it. Blocks every DB-backed test, both image builds and the Trivy gate — BLOCKED.md #1 |
 | `git` | ✅ `2.55.0` · repository initialised on `main` in P00 |
 | `node` / `npm` | ✅ `22.22.3` / `10.9.8` |
 | `pnpm` | ✅ `11.2.2` · workspace installed |
 | `uv` | ✅ `0.11.15` · Python **3.12.3** resolved for `services/api` |
 | `just` | ✅ `1.57.0` · installed during P00 (`npm i -g rust-just`) |
 | `pandoc` / MiKTeX | ✅ (used only by the `docs/` PDF pipeline in `build/`) |
+| Playwright browsers | ❌ **not installed** · every e2e spec is written and has never run — BLOCKED.md #3 |
+| Terraform | ❌ **not installed** · no provider plugins, so not even `validate` has run — BLOCKED.md #4 |
+| A cloud account | ❌ **none** · no AWS, no Cloudflare, no registry, no git remote. Every P15 acceptance criterion is outstanding — BLOCKED.md #4 |
 
 **Ports:** the local stack publishes on **55432** (postgres), **56379** (redis),
 **59000/59001** (minio), **51025/58025** (mailhog). They are offset from the

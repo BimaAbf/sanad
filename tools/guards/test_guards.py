@@ -20,6 +20,7 @@ sys.path.insert(0, str(GUARDS_DIR))
 
 import prompt_cache_hit  # noqa: E402
 import required_guardrail_layer  # noqa: E402
+import destructive_migration  # noqa: E402
 import route_authorisation  # noqa: E402
 import single_anthropic_client  # noqa: E402
 
@@ -198,3 +199,58 @@ def test_prompt_cache_structural_check_passes_on_the_real_gateway() -> None:
     result = prompt_cache_hit.GuardResult("prompt-cache-hit")
     prompt_cache_hit.check_structure(result)
     assert result.violations == [], result.violations
+
+
+# --------------------------------------------------------------- guard 5 ----
+# A destructive migration must not ship unlabelled. The upgrade/downgrade split
+# is the interesting part: a downgrade that drops what its upgrade created is
+# CORRECT and must not fire the guard.
+MIGRATION_FIXTURES = FIXTURES / "migrations"
+
+
+def _upgrade_offences(fixture: str) -> list[str]:
+    source = (MIGRATION_FIXTURES / fixture).read_text(encoding="utf-8")
+    body = destructive_migration._upgrade_body(source)
+    return [
+        match.group(0).strip()
+        for pattern in destructive_migration.DESTRUCTIVE
+        for match in pattern.finditer(body)
+    ]
+
+
+def test_destructive_migration_guard_fires_on_violation() -> None:
+    offences = _upgrade_offences("destructive.py.fixture")
+    assert offences, "guard did not fire on a DROP COLUMN in upgrade()"
+    assert any("DROP COLUMN" in offence.upper() for offence in offences)
+
+
+def test_destructive_migration_guard_is_quiet_on_an_additive_migration() -> None:
+    assert _upgrade_offences("additive.py.fixture") == []
+
+
+def test_a_downgrade_may_drop_what_its_upgrade_created() -> None:
+    """The whole point of splitting on `def downgrade`.
+
+    A downgrade never runs during a deploy, so the mid-bake compatibility
+    argument does not apply to it. A guard that flagged downgrades would flag
+    every migration ever written and would be switched off within a week.
+    """
+    source = (MIGRATION_FIXTURES / "additive.py.fixture").read_text(encoding="utf-8")
+    assert "DROP COLUMN" in source
+    assert "DROP COLUMN" not in destructive_migration._upgrade_body(source)
+
+
+def test_every_real_migration_in_the_repo_is_additive() -> None:
+    """The guard, run against the actual tree.
+
+    0005 and 0006 create tables; nothing so far drops one. If this ever fails,
+    the fix is to split the migration, not to relax the test.
+    """
+    versions = REPO_ROOT / "services" / "api" / "migrations" / "versions"
+    offenders: list[str] = []
+    for path in sorted(versions.glob("*.py")):
+        body = destructive_migration._upgrade_body(path.read_text(encoding="utf-8"))
+        for pattern in destructive_migration.DESTRUCTIVE:
+            if pattern.search(body):
+                offenders.append(f"{path.name}: {pattern.pattern}")
+    assert offenders == [], offenders

@@ -1,0 +1,128 @@
+name: Deploy
+
+# docs/08 §4. Merge to main → build → push → migrate → blue/green with a
+# 10-minute bake and automatic rollback on the 5xx or p95 alarms.
+#
+# ⚠️ NEVER EXECUTED. There is no AWS account, no ECR registry and no OIDC role.
+# This workflow parses and its job graph is correct; no runner has run it. The
+# acceptance criterion in docs/09 P15 — "a deliberately broken deploy rolls back
+# automatically within the bake window" — is outstanding. See PROGRESS.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, production]
+
+concurrency:
+  # Never two deploys to the same environment at once. A second CodeDeploy
+  # against a group that is mid-bake fails in a way that leaves traffic split.
+  group: deploy-${{ inputs.environment || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: me-south-1
+  ENVIRONMENT: ${{ inputs.environment || 'staging' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      api_image: ${{ steps.push.outputs.api_image }}
+      web_image: ${{ steps.push.outputs.web_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: build and push
+        id: push
+        run: |
+          set -euo pipefail
+          registry="${{ steps.ecr.outputs.registry }}"
+          tag="${GITHUB_SHA::12}"
+          docker build -t "$registry/misk-api:$tag" services/api
+          docker build -f apps/web/Dockerfile -t "$registry/misk-web:$tag" .
+          docker push "$registry/misk-api:$tag"
+          docker push "$registry/misk-web:$tag"
+          echo "api_image=$registry/misk-api:$tag" >> "$GITHUB_OUTPUT"
+          echo "web_image=$registry/misk-web:$tag" >> "$GITHUB_OUTPUT"
+
+  # Migrations run BEFORE the new tasks start, as a one-off task, and they are
+  # forward-only and additive (docs/08 §4). That ordering only works because
+  # additive migrations are compatible with the OLD code as well as the new —
+  # which is the whole reason destructive ones need a labelled PR.
+  migrate:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: refuse a destructive migration without the label
+        run: python tools/guards/destructive_migration.py
+
+      - name: alembic upgrade head (one-off ECS task)
+        run: |
+          set -euo pipefail
+          task_arn=$(aws ecs run-task \
+            --cluster "misk-${ENVIRONMENT}" \
+            --task-definition "misk-${ENVIRONMENT}-migrate" \
+            --launch-type FARGATE \
+            --overrides '{"containerOverrides":[{"name":"migrate","command":["alembic","upgrade","head"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "misk-${ENVIRONMENT}" --tasks "$task_arn"
+          exit_code=$(aws ecs describe-tasks --cluster "misk-${ENVIRONMENT}" --tasks "$task_arn" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          # A failed migration pages (docs/08 §5) and stops the deploy here,
+          # before any new task starts against a half-migrated schema.
+          test "$exit_code" = "0"
+
+  deploy:
+    needs: [build, migrate]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: blue/green via CodeDeploy
+        run: |
+          set -euo pipefail
+          aws deploy create-deployment \
+            --application-name "misk-${ENVIRONMENT}-api" \
+            --deployment-group-name "misk-${ENVIRONMENT}-api" \
+            --revision "revisionType=AppSpecContent,appSpecContent={content='$(cat infra/appspec.json)'}" \
+            --description "${GITHUB_SHA::12}"
+
+      # The bake and the rollback are CodeDeploy's, driven by the alarms in
+      # modules/ecs. This step only waits, so a red deploy is red in the
+      # Actions UI as well as in the console.
+      - name: wait for the bake to finish
+        run: |
+          deployment_id=$(aws deploy list-deployments \
+            --application-name "misk-${ENVIRONMENT}-api" \
+            --deployment-group-name "misk-${ENVIRONMENT}-api" \
+            --query 'deployments[0]' --output text)
+          aws deploy wait deployment-successful --deployment-id "$deployment_id"

@@ -128,7 +128,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run typecheck
       - run: pnpm exec turbo run test
-      # TODO(P12/P13): Storybook a11y run in both LTR and RTL.
+      # NOT YET IMPLEMENTED: Storybook with an LTR and an RTL story per
+      # component (docs/06 §8). The equivalent invariants that CAN be checked
+      # without a browser are covered by apps/web/src/lib/*.test.ts — contrast
+      # over the shipped stylesheet, touch-target arithmetic, the prompt
+      # ladder, the console role matrix. The RTL story requirement is a real
+      # gap and is recorded in PROGRESS.md, not silently dropped.
 
   # ---------------------------------------------------------- contract -----
   contract:
@@ -146,17 +151,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO(P12/P13): Playwright against docker-compose with the LLM stubbed,
-      # plus axe-core on every route.
-      - run: echo "e2e activates with P12/P13"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: install playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: build
+        run: pnpm --filter @misk/web build
+      # Playwright starts the app itself (see playwright.config.ts). The API is
+      # not required: every spec drives the client with the placeholder data the
+      # pages ship, which is what makes this job runnable before the API is
+      # deployed anywhere.
+      - name: playwright + axe-core
+        run: pnpm exec playwright test
+        working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
 
   # -------------------------------------------------------------- perf -----
   perf:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # TODO(P12/P13): Lighthouse CI with the hard budgets from docs/06.
-      - run: echo "perf budgets activate with P12/P13"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @misk/web build
+      # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
+      # the budgets and `assertions` are set to `error`, so a regression fails
+      # the job rather than printing a number nobody reads.
+      - name: lighthouse ci
+        run: pnpm exec lhci autorun
+        working-directory: apps/web
 
   # ---------------------------------------------------------- security -----
   security:
@@ -175,7 +208,28 @@ jobs:
         working-directory: services/api
       - name: pnpm audit
         run: pnpm audit --audit-level high || true
-      # TODO(P15): trivy image scan with a hard fail on HIGH/CRITICAL.
+
+      - name: build the api image
+        run: docker build -t misk-api:ci services/api
+      - name: build the web image
+        run: docker build -f apps/web/Dockerfile -t misk-web:ci .
+      # A HARD fail, unlike the two audits above. An audit finding is usually a
+      # transitive dependency nobody can act on today; a HIGH in a built image
+      # is something we are about to run as a service.
+      - name: trivy (api)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: misk-api:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: trivy (web)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: misk-web:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
 
   # ------------------------------------------------------------- evals -----
   evals:
@@ -187,9 +241,14 @@ jobs:
       - run: echo "evals activate with P03"
 
   # ------------------------------------------------------------ guards -----
-  # Four project-specific checks. Each prevents a class of bug that normal
+  # Five project-specific checks. Each prevents a class of bug that normal
   # testing misses. test_guards.py proves each one fires on a violation
   # fixture, so a guard that silently matches nothing cannot look like a pass.
+  #
+  # The fifth — destructive-migration — was added in P15. Migrations run before
+  # the new tasks start, so during the bake the OLD code serves traffic against
+  # the NEW schema; a DROP COLUMN is a 500 on every request that touches the
+  # table, from a deploy that has not technically failed.
   guards:
     runs-on: ubuntu-latest
     steps:
@@ -218,3 +277,8 @@ jobs:
       - name: required-guardrail-layer
         run: uv run python ../../tools/guards/required_guardrail_layer.py
         working-directory: services/api
+      - name: destructive-migration
+        run: uv run python ../../tools/guards/destructive_migration.py
+        working-directory: services/api
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}

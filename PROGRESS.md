@@ -5,7 +5,7 @@ One row per component. **Status** is one of `not started` · `in progress` ·
 sub-session's report — only after the orchestrator re-ran the gate command
 itself and read the real output.
 
-_Last updated: 2026-08-29_
+_Last updated: 2026-08-29 · after P09–P15_
 
 | # | Component | Status | Branch | Tests | Coverage | Gates open |
 |---|---|---|---|---|---|---|
@@ -13,21 +13,32 @@ _Last updated: 2026-08-29_
 | P01 | C01 Identity & access | **DONE** (service layer) | `feat/p00-scaffold` | 87 | 98% service · 99% router | repository.py needs a DB |
 | P02 | C02 Child profile & consent | **DONE** (service layer) | `feat/p00-scaffold` | 33 | 100% service · 100% gate | repository.py needs a DB |
 | P03 | C15 Gateway + guardrails | **DONE, gate open** | `feat/p00-scaffold` | 121 | **100% branch** | red-team corpus (#7) |
-| P04 | C03 Assessment engine | **DONE, gate open** | `feat/p00-scaffold` | 81 | **100% branch on domain/** | clinician verification (#4) |
+| P04 | C03 Assessment engine | **DONE, gate open** | `feat/p00-scaffold` | 87 | **100% branch on domain/** | clinician verification (#4) |
 | P05 | C04 PGEE AI orchestrator | **partial** | `feat/p00-scaffold` | — | — | graph/SSE not built — see below |
-| P06 | C05 Content & curriculum | **DONE, gate open** | `feat/p00-scaffold` | 49 | **100% branch** | native-speaker sign-off (#6) |
-| P07 | C06 Adaptive engine (BKT) | **DONE, gate open** | `feat/p00-scaffold` | 72 | **100% branch on domain/** | BKT parameters + the addition (#5) |
+| P06 | C05 Content & curriculum | **DONE, gate open** | `feat/p00-scaffold` | 48 | **100% branch** | native-speaker sign-off (#6) |
+| P07 | C06 Adaptive engine (BKT) | **DONE, gate open** | `feat/p00-scaffold` | 73 | **100% branch on domain/** | BKT parameters + the addition (#5) |
 | P08 | C07 Tutor orchestrator | **DONE** | `feat/p00-scaffold` | 67 | **100% branch** | — |
-| P09 | C08 Voice gateway | not started | — | — | — | SLT corpus; native speaker on audio |
-| P10 | C09 Progress | not started | — | — | — | — |
-| P11 | C10 Notifications | not started | — | — | — | — |
-| P12 | C12 Caregiver app | not started | — | — | — | — |
-| P13 | C13 Child app | not started | — | — | — | OT accessibility; real-device audio |
-| P14 | C14 Clinician console | not started | — | — | — | — |
-| P15 | Infrastructure & CI | not started | — | — | — | — |
+| P09 | C08 Voice gateway | **DONE, gates open** | `feat/p00-scaffold` | 172 | **100% branch on domain/** | SLT corpus (#8) · calibration (#9) · voice talent (#10) · listening test (#11) |
+| P10 | C09 Progress | **DONE** (service layer) | `feat/p00-scaffold` | 45 | **100% branch on domain/** | repository.py needs a DB |
+| P11 | C10 Notifications | **DONE** (policy + send path) | `feat/p00-scaffold` | 47 | **100% branch on domain/** | DB-level dedupe unproven |
+| P12 | C12 Caregiver app | **partial** | `feat/p00-scaffold` | 87 web | — | Playwright never run · no Storybook · no PWA · #1 |
+| P13 | C13 Child app | **partial** | `feat/p00-scaffold` | (in the 87) | — | Playwright never run · OT review (#12) · real-device audio |
+| P14 | C14 Clinician console | **partial** | `feat/p00-scaffold` | (in the 87) | — | no auth realm · no editors · no audit_log |
+| P15 | Infrastructure & CI | **partial** | `feat/p00-scaffold` | 18 guards | — | never applied, never deployed, CI never run |
 
-**589 unit tests, all passing.** 100% branch coverage on every `domain/`
-package, `app/guardrails/`, `app/ai/` and `app/modules/tutor_ai/`.
+**853 API unit tests + 18 guard tests + 87 web tests, all passing.**
+
+The branch-coverage gate now reports **PASS on 30 files** at 100% branch
+coverage — every `domain/` package plus `app/guardrails/`.
+
+> **That number is new, and so is the gate actually running.** `tools/lint/
+> coverage_gate.py` had two defects and had reported `SKIP` on every run since
+> P00: it matched only files *named* `domain*` (so `domain/` packages — most of
+> them — were invisible), and it matched on an `app/` path prefix that
+> `coverage.xml` does not write, since paths there are relative to the `<source>`
+> root. Both are fixed. Earlier PROGRESS entries claiming 100% branch coverage
+> were reading the pytest terminal report by hand; they were correct, but the
+> gate that was supposed to enforce them was not enforcing anything.
 
 ### What P05 is missing, stated plainly
 
@@ -43,6 +54,134 @@ and needed no checkpointer to be exercised.
 
 ---
 
+---
+
+## P09–P15 — what was built, and what was not
+
+The honest summary is that **P09, P10 and P11 are complete to the same standard
+as P01–P08, and P12–P15 are partial.** The dividing line is not effort; it is
+what can be *verified* on this machine. The backend components are pure logic
+over tested domain code. The three client apps and the whole of infrastructure
+are things whose acceptance criteria are about something *happening* — a browser
+rendering, a container building, an `apply` running — and none of that can
+happen here.
+
+### P09 — C08 voice gateway · DONE, gates open
+
+Built to docs/04d as revised by docs/12 §Δ2: `normalize_ar`, an Egyptian g2p
+rule table, the weighted-Levenshtein scorer with the docs/04d cost matrix, three
+verdicts, accept-on-effort, the caregiver override, the Qwen → Groq Whisper →
+caregiver-confirmation ladder, upload validation by magic bytes, unconditional
+audio deletion, the offline render plan and publish gate, and a fine-tune
+exporter that refuses unconsented rows.
+
+**Three findings from the 60-pair corpus**, all recorded in
+`docs/adr/011-voice-scoring.md` rather than reconciled away:
+
+1. **A real false accept at exactly the threshold.** باب heard as شباك scores
+   0.550, and 0.550 accepts. Fixed with a closed-vocabulary rule — an ASR
+   hypothesis that exactly matches another taught word is capped at `retry` —
+   not by moving the threshold, which would have rejected the substitutions the
+   design exists to accept. **The rule is not in docs/04d and no therapist has
+   seen it.** → REVIEW-QUEUE #8
+2. **The `vowel length 0.15` class in docs/04d is unreachable.** Unvowelised
+   Arabic writes no short vowels, so a shortened vowel arrives as a deleted long
+   vowel priced at 0.8. The constant is right; the path to it does not exist.
+3. **Two corpus rows had wrong hand-arithmetic.** Metathesis inside a cluster
+   costs 1.1, not 2.0, because a cluster-internal deletion is cheap. The
+   implementation was right and my derivation was naive.
+
+**Verified:** attempt 2 is accepted on pure noise · a genuine non-match is never
+accepted · all 88 skills are reachable receptively without microphone consent ·
+audio leaves neither a temp file nor an S3 object without `voice_retention` ·
+`app.modules.voice` cannot import `app.ai` (asserted by parsing imports, not by
+spying on calls).
+
+**Not built:** the pgvector per-child reference model; ffmpeg transcoding (the
+validator sniffs the container, nothing re-encodes); the actual VoxCPM2 render.
+
+### P10 — C09 progress · DONE (service layer)
+
+One `compute()` serves both rollup paths, so the nightly backstop can genuinely
+disagree with the incremental path. A 30-session synthetic history — including
+same-day sessions and a gap week, the two shapes where a delta-based path
+diverges — runs through both and diffs to zero.
+
+The three product rules from docs/04a §C09 live in `domain/views.py`: no trend
+under three points, no norm on any dashboard (checked over the *entire* OpenAPI
+document), and a regression that always carries exactly three activities or is
+not surfaced at all.
+
+**Not verified:** `repository.py` is 0% covered. Migration `0005` has never run.
+
+### P11 — C10 notifications · DONE (policy + send path)
+
+One `decide()` gate that every send passes through, checking content → cap →
+quiet hours in that order. Ten eligible notifications in a week deliver exactly
+three. A 22:00 notification is delivered at 08:00, not dropped. `pgee_due` fires
+at 180, 194 and 208 days and then never again, over a 250-day simulation.
+Egypt's DST is tested in both directions, and there is a guard test asserting the
+tz database on the machine actually has Egyptian DST rules — without it the DST
+tests would pass vacuously.
+
+**Not verified:** the database-level dedupe. docs/10 T11 §10 asks for proof that
+*Postgres* rejects a duplicate; what exists is an assertion about the DDL text,
+which is a weaker claim and is labelled as one in the test.
+
+### P12/P13/P14 — the three clients · PARTIAL
+
+**Playwright has never run.** No browser binary is installed and CI has never
+executed a job. Every spec file opens with a `NEVER EXECUTED` banner.
+
+So the interaction contract was moved into TypeScript modules with Vitest
+coverage — `lib/interaction.ts`, `lib/prompt-ladder.ts`, `lib/progress-range.ts`,
+`lib/outbox.ts`, `lib/contrast.ts`, `lib/console-access.ts` — and 87 tests pass
+against them. That covers the touch-target arithmetic, the ladder terminating in
+a success at every legal wait time, monotonic narrowing under adversarial
+estimates, a simulated 30-second dropout losing zero attempts and creating zero
+duplicates, contrast measured over the shipped stylesheet, and the console role
+matrix walked exhaustively.
+
+**A real defect found this way:** `globals.css` claimed every foreground/
+background pair met 7:1. Measured, `--c-practising` is **3.26:1** and
+`--c-resting` is **3.58:1** on white. Both are fine as a skill-map swatch (WCAG
+2.2 SC 1.4.11 asks 3:1 of a non-text indicator) and neither is usable as a word,
+so the pair list now separates the two uses and two text-safe tokens were added.
+
+**A document disagreement, resolved on my own authority:** docs/04e §C13 says
+touch targets are ≥ 80px; docs/06 §5 and docs/09 P13 say ≥ 88px. I used 88 and
+recorded it at the constant. → REVIEW-QUEUE #12
+
+`next build` succeeds: 13 routes, 106 kB shared JS, largest route 125 kB first
+load. eslint, stylelint and `tsc --noEmit` are all clean.
+
+**Not built:** Storybook with LTR and RTL stories (a stated docs/06 §8
+requirement, unmet); the PWA layer; the report route; the console auth realm and
+its editors; `audit_log`; the Zustand/IndexedDB/Cache-API layer in the child app;
+four of the five activity renderers.
+
+### P15 — infrastructure · PARTIAL
+
+Written: production Dockerfiles for both services, Terraform modules and two
+environments, the deploy workflow with blue/green and a 10-minute bake, the
+Lighthouse budgets as hard `error` assertions, six runbooks, and the CI jobs that
+were stubs after P00 (e2e, perf, Trivy).
+
+**Genuinely verified: exactly one thing** — a fifth CI guard,
+`destructive_migration.py`, with a violation fixture and a control fixture, and
+`test_guards.py` proving it fires on one and stays quiet on the other. It exists
+because migrations run *before* the new tasks start, so during the bake the old
+code serves traffic against the new schema, and a `DROP COLUMN` is a 500 on every
+request that touches the table from a deploy that has not technically failed.
+
+**Everything else in P15 is unexecuted.** `terraform validate` has not run —
+there are no provider plugins on this machine. No image has been built. CI has
+never run. There is no AWS account, no registry, no OIDC role, and no remote.
+Every one of docs/09 P15's acceptance criteria — apply from zero, automatic
+rollback, the RPO/RTO restore drill, kill switches under load, Trivy on a built
+image, gitleaks over full history — is **outstanding**.
+
+---
 ## ⚠️ The Docker daemon on this machine stopped mid-session and did not recover
 
 This is the single most important caveat in this file.
@@ -68,11 +207,11 @@ is the first thing to run, and I would not trust the DDL until it has.
 
 | Stage | Components | State |
 |---|---|---|
-| 1 — Spine | P00, P01, P02, P15 | P00/P01/P02 built; **P15 not started**; DB-backed tests blocked |
+| 1 — Spine | P00, P01, P02, P15 | P00/P01/P02 built; **P15 written but never executed**; DB-backed tests blocked |
 | 2 — Assessment, no AI | P04 | Built, 100% branch. **Gate needs a clinician (#4).** |
 | 3 — Learning, no AI | P06, P07 | Built. Random-tapper test green at 1000 sims. **Gates #5, #6.** |
 | 4 — AI layer | P03, P05, P08 | P03/P08 built; **P05 graph + SSE outstanding**. Gate #7. |
-| 5 — Voice, clients, ops | P09–P14 | not started |
+| 5 — Voice, clients, ops | P09–P14 | P09/P10/P11 built; P12/P13/P14 partial and **never run in a browser**. Gates #8–#13. |
 
 **No stage gate has been crossed.** Stages 2 and 3 were required to produce a
 working product with zero AI code written; that ordering was followed — P04, P06

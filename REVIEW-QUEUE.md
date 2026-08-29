@@ -5,7 +5,7 @@ close. Each is written to be actionable without reading any transcript.
 
 Nothing here has been closed by the orchestrator, and nothing here will be.
 
-_Last updated: 2026-08-29 · after P01–P08_
+_Last updated: 2026-08-29 · after P09–P15_
 
 ---
 
@@ -20,9 +20,17 @@ _Last updated: 2026-08-29 · after P01–P08_
 | **5** | The mastery rule needed an unreviewed addition | Stage 3 gate | Clinician + you | ~1 hour to decide |
 | **6** | 88 curriculum labels, vowelisation and phonemes | Stage 3, Stage 5 | Native speaker | ~3 days |
 | **7** | Red-team corpus and blocked-category vocabulary | Stage 4 gate | Independent red-teamer | ~1 day |
+| **8** | 60 pronunciation-scoring verdicts, and one addition to the scorer | Stage 5 | Speech-language therapist | ~half a day |
+| **9** | The 0.55 acceptance threshold is uncalibrated | Voice go-live | Pilot centre, with consent | 30 recordings |
+| **10** | The Nour voice: casting, recording, a perpetual licence | **Stage 5, long lead time** | You | weeks |
+| **11** | VoxCPM2 Arabic listening test | Stage 5 voice gate | Native Egyptian speaker | ~half a day |
+| **12** | OT accessibility review and real-device audio | **Stage 5 gate** | Occupational therapist + 2 families | ~2 days |
+| **13** | Groq DPA and data terms; VoxCPM2 / Qwen licences | **Pilot traffic** | You / legal | days |
 
-**Most urgent: #3.** It has recruiting lead time and gates everything after
-Stage 2. #4 and #5 both need that same person.
+**Most urgent: #3 and #10.** #3 has recruiting lead time and gates everything
+after Stage 2; #4 and #5 need that same person. #10 is on the critical path for
+the entire voice tier and has the longest lead time of anything in this file —
+docs/12 §Δ6 puts it in Week 2 for exactly that reason, and it has not started.
 
 ---
 
@@ -222,6 +230,171 @@ phrasings a distressed parent actually uses at 2am, and that is precisely what
 the severity-1 categories need to catch.
 
 P03 asks for 60 adversarial cases from an independent author. I have 0 of those.
+
+---
+
+---
+
+## #8 — The 60 pronunciation-scoring verdicts, and one addition to the scorer
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | Stage 5 voice sign-off. Does **not** block development. |
+| **Who** | A speech-language therapist working with Egyptian Arabic-speaking children |
+
+**What I built.** `services/api/tests/unit/voice_corpus.py` — 62 (expected,
+heard) pairs covering every substitution class in docs/04d §3, each with the
+phonological process named and the arithmetic shown.
+`docs/adr/011-voice-scoring.md` records what happened when they were run.
+
+**What I need you to answer.** Three questions, and only you can answer them:
+
+1. Are these really the error patterns this population produces?
+2. For each accepted row: should a child producing that be told they were right?
+3. Are the ten non-matches really non-matches, to a listener?
+
+**One addition needs your ruling specifically.** The corpus found a false accept
+at exactly the threshold: باب (door) heard as شباك (window) scores 0.550, and
+0.550 is an accept. I did not move the threshold — that would reject the
+emphatic and stopping substitutions the whole design exists to accept. Instead I
+added a rule: **an ASR hypothesis that exactly matches another taught word is
+capped at `retry`.** The vocabulary is closed at 88 items, so we know with
+certainty that it is a different word rather than an approximation of the target.
+
+That rule is not in docs/04d. It is mine, and it changes what a child is told.
+
+**A second thing you should know.** The `vowel length 0.15` cost in docs/04d is
+unreachable in practice: unvowelised Arabic writes no short vowels, so a
+shortened vowel arrives at the scorer as a deleted long vowel priced at 0.8. Not
+a bug, but the cost table has a row that never fires today.
+
+**What happens if this stays open.** The scorer ships with verdicts nobody
+clinically qualified has agreed to. Given accept-on-effort the worst case for
+the child is being praised for an approximation — but the *measurement* recorded
+against them is then wrong, and that measurement is what the caregiver dashboard
+is built out of.
+
+---
+
+## #9 — The 0.55 acceptance threshold has never been calibrated
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | Voice go-live |
+| **Who** | The pilot centre, with consent — then the therapist from #8 reads the result |
+
+docs/04d §8 requires "a 30-sample recorded set from real children (with consent,
+via the pilot centre)" to calibrate 0.55 before launch. It does not exist. The
+value is a design position argued from asymmetric costs, and the argument is a
+good one — but it is an argument, not a measurement, and it decides what a child
+is told about their own speech.
+
+Recorded in `docs/adr/011-voice-scoring.md` D4.
+
+---
+
+## #10 — The Nour voice: casting, recording, and a perpetual licence
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | **The entire voice tier.** Longest lead time in this file. |
+| **Who** | You |
+
+docs/12 §3.1 needs 20–30 minutes of studio-quality recording from a real
+Egyptian woman — ideally an early-intervention specialist, or a mother who
+naturally speaks to small children — to clone into the Nour voice.
+
+**Three things, and the third is a contract.**
+
+1. **Cast and record.** docs/12 §Δ6 puts this in Week 2 precisely because of the
+   lead time. Nothing has started.
+2. **Render.** About $0.70 of GPU time once the recording exists; the pipeline
+   is written (`tools/voice_render/`).
+3. **A signed release.** The person whose voice becomes Nour signs a perpetual,
+   transferable licence for synthetic reproduction. A real contract, not a
+   formality: you are cloning someone's voice and shipping it to thousands of
+   children, and assumption C7 then says that voice must never change.
+
+**What happens if this stays open.** There is no audio at all. The child app
+plays static files from a CDN; the CDN is empty; no session can run.
+
+---
+
+## #11 — VoxCPM2 Arabic listening test
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | The Stage 5 voice gate — this decides the whole TTS choice |
+| **Who** | A native Egyptian Arabic speaker |
+
+docs/12 §Δ2 makes this an explicit gate: render 20 of our actual skill labels
+with VoxCPM2 and blind-rate them against the Azure equivalents. **If VoxCPM2
+loses on intelligibility or dialect authenticity, keep Azure for TTS and take
+the rest of the revision.**
+
+Include the labels that expose dialect. جزمة must be /gazma/, not /dʒazma/;
+جبنة must be /gebna/. A child taught /dʒazma/ learns a word they will not hear
+at home and that their family will not recognise — which breaks the one thing
+the whole product rests on: a child mapping a sound to an object in their own
+house.
+
+Half a day, and it decides the voice tier.
+
+---
+
+## #12 — Occupational therapist accessibility review, and real-device audio
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | **Stage 5 gate** |
+| **Who** | An occupational therapist, plus two families |
+
+**What I built.** Every mechanical rule from docs/04e §C13 and docs/06 §4 is now
+a constant with a test against it: 88px targets, 5-word instructions, the 3Hz
+animation ceiling, the 400ms tap tolerance, 800ms of calm between activities,
+the retuned VAD parameters. 87 web tests pass.
+
+**Why that is not enough, in the document's own words:** *"axe-core cannot tell
+you that an 8-second wait is too short for a particular child. A parent can."*
+
+**Two specific things I could not do.**
+
+1. **Real-device audio.** docs/10 T13 §23 requires iOS Safari on hardware, not
+   an emulator — the autoplay policy is exactly what emulators get wrong. The
+   spec is `test.skip` with the reason written into it. One low-end Android and
+   one iOS device are needed.
+2. **A document disagreement I resolved on my own authority.** docs/04e §C13
+   says touch targets are ≥ 80px; docs/06 §5 and docs/09 P13 say ≥ 88px. I used
+   88, because the stricter value cannot violate either. Worth one sentence of
+   confirmation from you.
+
+---
+
+## #13 — Groq data terms, and two model licences
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | **Any pilot traffic**, including pseudonymised. Not development. |
+| **Who** | You, and probably a lawyer |
+
+docs/12 §2 is unambiguous: *"Groq's free-tier data terms are not established…
+Before any pilot traffic — even pseudonymised — someone must read those and
+confirm: no training on our data, a stated retention period, and a signed DPA.
+This is child health-adjacent data in a PDPL jurisdiction."*
+
+Two more, from docs/12 §3.4, both load-bearing:
+
+- **VoxCPM2** weights — commercial-use terms, and whether a voice cloned from a
+  consented recording carries any restriction.
+- **Qwen3-ASR-1.7B** — commercial use, and distribution of a fine-tuned
+  derivative. The fine-tune is the strategic argument in docs/12 §3.2; if the
+  licence forbids it, that argument collapses.
 
 ---
 

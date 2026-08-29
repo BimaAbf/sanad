@@ -1,0 +1,16 @@
+"""CONTROL FIXTURE — an additive migration, safe to run mid-bake.
+
+The `downgrade()` here DROPS the column it created. That is deliberate: the
+guard must not flag it, because a downgrade never runs during a deploy, and a
+guard that flagged every downgrade would flag every migration ever written.
+"""
+
+
+def upgrade() -> None:
+    op.execute("ALTER TABLE children ADD COLUMN nickname text")
+    op.execute("CREATE INDEX children_nickname ON children (nickname)")
+
+
+def downgrade() -> None:
+    op.execute("ALTER TABLE children DROP COLUMN nickname")
+    op.drop_index("children_nickname")
