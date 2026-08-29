@@ -6,7 +6,7 @@
 ## 1. Repository layout
 
 ```
-misk/
+sanad/
 ├── apps/
 │   ├── web/                  Next.js 15 — /app, /play, /console (one deployable, 3 route groups)
 │   └── web-e2e/              Playwright
@@ -172,7 +172,7 @@ The four `guards` checks are cheap, project-specific, and each prevents a class 
 ## 6. Local development
 
 ```bash
-git clone … && cd misk
+git clone … && cd sanad
 cp .env.example .env                 # AI_LIVE=0 by default — fixtures, no network
 docker compose up -d                 # postgres, redis, minio, langfuse, mailhog
 just bootstrap                       # uv sync, pnpm install, alembic upgrade, seed

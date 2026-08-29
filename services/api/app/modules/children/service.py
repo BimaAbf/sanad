@@ -102,7 +102,7 @@ class ChildrenService:
         if problem is domain.DobProblem.TOO_OLD:
             raise InvalidDob(
                 detail=f"Child is older than {domain.MAX_AGE_YEARS} years.",
-                message_ar="مِسك دلوقتي للأطفال لحد ٨ سنين.",
+                message_ar="سند دلوقتي للأطفال لحد ٨ سنين.",
             )
         if not domain.check_gestational_weeks(payload.gestational_weeks):
             raise InvalidDob(

@@ -33,12 +33,18 @@ about the spec (ORCHESTRATOR.md §5):
     closed-vocabulary rule in `is_a_different_taught_word`, NOT by moving the
     threshold. See that function.
 
-AND ONE FINDING ABOUT THE COST TABLE ITSELF: the `vowel length 0.15` class in
-docs/04d §3 is **unreachable through this pipeline**. Short vowels are not
-written in unvowelised Arabic, ASR returns unvowelised text, and normalisation
-strips tashkeel, so a shortened vowel reaches the scorer as a deleted long vowel
-priced at 0.8. The constant is right; the path to it does not exist until a
-reviewed vowelised phoneme column ships. See the `vowel_shortening` rows.
+AND ONE FINDING ABOUT THE COST TABLE ITSELF, SINCE FIXED: the `vowel length
+0.15` class in docs/04d §3 was **unreachable through this pipeline**. Short
+vowels are not written in unvowelised Arabic, ASR returns unvowelised text, and
+normalisation strips tashkeel, so a shortened vowel reached the scorer as a
+deleted long vowel priced at 0.8 — 5.3x the price the document sets for the one
+class it calls "almost never meaningful". `deletion_cost` now prices a long
+vowel deleted BETWEEN TWO CONSONANTS at 0.15, which is what CVC -> CC vowel
+shortening looks like in an unvowelised transcript. Deletion only, and only
+between consonants: a cheap vowel INSERTION lets the aligner slide unrelated
+strings together, and measurably pushed صابونة/ترابيزة from 0.457 to 0.557,
+across the accept threshold. That rule is mine and no therapist has seen it —
+REVIEW-QUEUE #8. See the `vowel_shortening` rows.
 
 → REVIEW-QUEUE.md
 ================================================================================
@@ -142,29 +148,60 @@ CORPUS: tuple[Pair, ...] = (
     # --- vowel shortening --------------------------------------------------
     # Labelled `vowel_length` when this corpus was written, on the assumption
     # that a shortened vowel would reach the scorer as /a/ against /aː/ and cost
-    # the documented 0.15. IT CANNOT. Unvowelised Arabic writes no short vowels,
-    # ASR emits unvowelised text, and `normalize_ar` strips any tashkeel that
-    # survives — so a shortened vowel arrives as a DELETED long vowel and is
-    # priced as an ordinary indel (0.8), not as a length error (0.15).
+    # the documented 0.15. IT CANNOT, AS A SUBSTITUTION. Unvowelised Arabic
+    # writes no short vowels, ASR emits unvowelised text, and `normalize_ar`
+    # strips any tashkeel that survives — so a shortened vowel arrives as a
+    # DELETED long vowel. It was priced as an ordinary indel (0.8); it is now
+    # priced as the length error it is (0.15) whenever the deleted long vowel
+    # sits between two consonants, which is exactly the CVC -> CC shape of
+    # vowel shortening. See `similarity.deletion_cost` for why the discount is
+    # deletion-only and consonant-flanked, and REVIEW-QUEUE #8 for the fact
+    # that no therapist has ruled on it.
     #
-    # These rows are therefore renamed to what they actually exercise. The
-    # 0.15 constant is still correct and still reachable — it applies when a
-    # reviewed, vowelised `phonemes` column is supplied — and it is tested
-    # directly in test_voice_scoring.py::test_vowel_length_cost_is_reachable
-    # rather than pretended at here. See REVIEW-QUEUE.md.
+    # The rows keep the name `vowel_shortening` rather than `vowel_length`,
+    # because what they exercise is still a deletion in an unvowelised string,
+    # not the substitution docs/04d §3 describes.
     Pair(
-        "باب", "بب", "vowel_shortening", "accept", "delete A from bAb (3): 0.8/3 = 0.267 -> 0.733"
-    ),
-    Pair("سرير", "سرر", "vowel_shortening", "accept", "delete I from srIr (4): 0.8/4 -> 0.800"),
-    Pair("راس", "رس", "vowel_shortening", "accept", "delete A from rAs (3): 0.8/3 -> 0.733"),
-    Pair(
-        "كوباية", "كبايه", "vowel_shortening", "accept", "delete U from kUbAya (6): 0.8/6 -> 0.867"
+        "باب",
+        "بب",
+        "vowel_shortening",
+        "accept",
+        "delete A between b and b in bAb (3): 0.15/3 -> 0.950",
     ),
     Pair(
-        "مناخير", "مناخر", "vowel_shortening", "accept", "delete I from mnAxIr (6): 0.8/6 -> 0.867"
+        "سرير",
+        "سرر",
+        "vowel_shortening",
+        "accept",
+        "delete I between r and r in srIr (4): 0.15/4 -> 0.963",
     ),
     Pair(
-        "صابونة", "صبونة", "vowel_shortening", "accept", "delete A from SAbUna (6): 0.8/6 -> 0.867"
+        "راس",
+        "رس",
+        "vowel_shortening",
+        "accept",
+        "delete A between r and s in rAs (3): 0.15/3 -> 0.950",
+    ),
+    Pair(
+        "كوباية",
+        "كبايه",
+        "vowel_shortening",
+        "accept",
+        "delete U between k and b in kUbAya (6): 0.15/6 -> 0.975",
+    ),
+    Pair(
+        "مناخير",
+        "مناخر",
+        "vowel_shortening",
+        "accept",
+        "delete I between x and r in mnAxIr (6): 0.15/6 -> 0.975",
+    ),
+    Pair(
+        "صابونة",
+        "صبونة",
+        "vowel_shortening",
+        "accept",
+        "delete A between S and b in SAbUna (6): 0.15/6 -> 0.975",
     ),
     # --- metathesis --------------------------------------------------------
     # Two adjacent phonemes swapped. NOT a cheap class in docs/04d: it is two
@@ -176,14 +213,14 @@ CORPUS: tuple[Pair, ...] = (
         "منخاير",
         "metathesis",
         "accept",
-        "2 subs at 1.0 in a 6-string: 2.0/6 = 0.333 -> 0.667",
+        "2 subs at 1.0 plus a vowel indel in a 6-string: 1.9/6 -> 0.683",
     ),
     Pair(
         "ترابيزة",
         "تربايزة",
         "metathesis",
         "accept",
-        "2 subs at 1.0 in a 7-string: 2.0/7 = 0.286 -> 0.714",
+        "2 subs at 1.0 plus a vowel indel in a 7-string: 1.9/7 -> 0.729",
     ),
     Pair(
         "معلقة",

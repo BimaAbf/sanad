@@ -2,6 +2,12 @@
 
 Everything here is something an agent cannot produce for you. The orchestrator keeps the **Status** column current; you fill the gaps.
 
+**This file is the register. The procedures are in [`docs/setup/`](docs/setup/README.md):**
+[**00 — API keys quickstart**](docs/setup/00-api-keys-quickstart.md) ·
+[01 — the Nour voice](docs/setup/01-nour-voice.md) ·
+[02 — Groq and two model licences](docs/setup/02-groq-and-model-licences.md) ·
+[03 — the other credentials](docs/setup/03-other-credentials.md)
+
 > **Orchestrator status, 2026-08-29 — P00 complete, nothing blocked.**
 > Read [`REVIEW-QUEUE.md`](REVIEW-QUEUE.md) first (3 open items, none blocking today), then [`PROGRESS.md`](PROGRESS.md).
 > Only **O2 (named clinician)** has a hard deadline: it gates Stage 2 and has recruiting lead time.
@@ -30,7 +36,7 @@ Answer **O1 and O2 in week 1.** O1 is a licensing question, not an engineering o
 | Key | Needed for | Needed at | Without it | Status |
 |---|---|---|---|---|
 | `ANTHROPIC_API_KEY` | DP1 interpret + DP4 report (`docs/12 §2` routing) | **Gate 4** — eval runs and live-AI smoke tests | Everything builds and tests on recorded fixtures | ☐ |
-| `GROQ_API_KEY` | DP0, DP2, DP3, session summaries | **Gate 4** — same | Same | ☐ |
+| `GROQ_API_KEY` | **ASR only today** (Whisper failover in the voice chain). The DP0/DP2/DP3 routing from docs/12 is not implemented: the gateway has one provider, `claude-opus-5` | Free tier — get it now, it is the one free key that changes the product | Mic answers "unavailable"; caregiver-confirm carries the attempt | ☐ |
 | Cloudflare R2 — account id, access key, secret | Audio + media hosting | **Gate 5** — P09 render, P06 publish | MinIO in docker-compose covers local dev completely | ☐ |
 | GPU provider token (Thunder Compute or equivalent) | VoxCPM2 voice render, Qwen3-ASR host | **Gate 5** — P09 | Placeholder tones; the scoring logic still tests fully | ☐ |
 | SMS aggregator credentials | OTP delivery | **Stage 1**, real-device testing only | `NullSms` prints the code to console — full auth flow works | ☐ |
@@ -40,6 +46,8 @@ Answer **O1 and O2 in week 1.** O1 is a licensing question, not an engineering o
 
 **Before you paste any key:** confirm Groq's Services Agreement and DPA — no training on our data, a stated retention period, a signed DPA. This is child health-adjacent data in a PDPL jurisdiction. Blocking for the pilot, not for development. (`docs/12 §2`)
 
+**How to actually do all of this: [`docs/setup/`](docs/setup/README.md).** `just up` prints which of these are set and, for each absent one, the mode the system runs in instead — it never prints a value.
+
 ---
 
 ## 3. People — start recruiting now, they have lead times
@@ -48,7 +56,7 @@ Answer **O1 and O2 in week 1.** O1 is a licensing question, not an engineering o
 |---|---|---|---|---|
 | **Developmental paediatrician / early-intervention specialist** | Verify 6 hand-calculated scoring cases; sign the item bank and report template; staff the escalation rota | **Stage 2 gate** — earliest hard dependency | ~2 days spread over the build, then on-call | ☐ |
 | **Native Egyptian Arabic speaker** | Review all 88 curriculum labels, every UI string, and the rendered audio corpus | Stage 3 and Stage 5 | ~3 days total | ☐ |
-| **Voice talent — Egyptian woman, warm, used to speaking with small children** | 20–30 min studio recording → cloned as "نور" (Nour), frozen for the product's life | **START NOW.** The render pipeline is built and has nothing to render; without this there is no audio and no session can run | Half a day + a perpetual synthetic-reproduction release | ☐ · **REVIEW-QUEUE #10 — longest lead time in the project** |
+| **Voice talent — Egyptian woman, warm, used to speaking with small children** | 20–30 min studio recording → cloned as "نور" (Nour), frozen for the product's life | **START NOW.** The render pipeline is built and has nothing to render; without this there is no audio and no session can run | Half a day + a perpetual synthetic-reproduction release | ☐ · **REVIEW-QUEUE #10 — longest lead time in the project** · casting brief, recording script and release checklist: [`docs/setup/01`](docs/setup/01-nour-voice.md); `just voice-script` |
 | **Speech-language therapist** | Agree expected verdicts on the 62-pair pronunciation corpus (it is written and passing, against MY expectations); rule on the closed-vocabulary addition I had to make; calibrate 0.55 against 30 real recordings | Stage 5 | ~1 day | ☐ · REVIEW-QUEUE #8, #9 |
 | **Occupational therapist** | Accessibility review of the child app with real children | Stage 5 gate, and again before GA | ~1 day | ☐ |
 | **Independent red-teamer** | Write the 60-case adversarial corpus — must not be whoever wrote the prompts | Stage 4 gate | ~1 day | ☐ |
@@ -75,7 +83,7 @@ The voice talent and the clinician are the two with real calendar lead time. Eve
 
 | Tool | State |
 |---|---|
-| Docker Desktop | ❌ **not reachable** · the named pipe is absent and starting Docker Desktop did not restore it. Blocks every DB-backed test, both image builds and the Trivy gate — BLOCKED.md #1 |
+| Docker Desktop | ✅ **running** · `com.docker.service` was stopped; `Start-Service com.docker.service` from an elevated PowerShell fixed it. All six migrations applied, `just test` green end to end. Images still unbuilt — `docs/setup/04` §8 |
 | `git` | ✅ `2.55.0` · repository initialised on `main` in P00 |
 | `node` / `npm` | ✅ `22.22.3` / `10.9.8` |
 | `pnpm` | ✅ `11.2.2` · workspace installed |

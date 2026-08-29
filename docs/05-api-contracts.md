@@ -1,6 +1,6 @@
 # 05 — API Contracts
 
-Base: `https://api.misk.app/v1`. OpenAPI 3.1 is generated from FastAPI and is the **source of truth** — the TypeScript client in `packages/api-client` is code-generated from it in CI, so a backend change that breaks the frontend fails the build rather than production.
+Base: `https://api.sanad.app/v1`. OpenAPI 3.1 is generated from FastAPI and is the **source of truth** — the TypeScript client in `packages/api-client` is code-generated from it in CI, so a backend change that breaks the frontend fails the build rather than production.
 
 ## 1. Conventions
 
@@ -21,7 +21,7 @@ Base: `https://api.misk.app/v1`. OpenAPI 3.1 is generated from FastAPI and is th
 
 ```jsonc
 {
-  "type": "https://api.misk.app/errors/assessment-too-soon",
+  "type": "https://api.sanad.app/errors/assessment-too-soon",
   "title": "Assessment not yet due",
   "status": 409,
   "detail": "Last assessment completed 96 days ago; minimum interval is 150 days.",

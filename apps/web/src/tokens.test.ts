@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import preset from "@misk/config/tailwind";
+import preset from "@sanad/config/tailwind";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
 const DOCS = join(REPO_ROOT, "docs", "06-frontend-ux.md");

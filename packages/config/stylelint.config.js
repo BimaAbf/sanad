@@ -1,5 +1,5 @@
 /**
- * Stylelint config for مِسك (Misk).
+ * Stylelint config for سند (Sanad).
  *
  * The rule that matters: physical CSS properties are BANNED.
  *

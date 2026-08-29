@@ -161,7 +161,7 @@ async def test_consent_is_checked_before_the_provider_is_called() -> None:
 async def test_audio_is_deleted_after_scoring_without_retention_consent() -> None:
     """T09 §9 — check the temp directory AND the bucket."""
     service, sink = build_service(consent=FakeConsent(voice_asr=True))
-    before = set(Path(os.environ.get("TEMP", "/tmp")).glob("misk-voice-*"))
+    before = set(Path(os.environ.get("TEMP", "/tmp")).glob("sanad-voice-*"))
 
     outcome = await service.score_attempt(
         child_id="c1",
@@ -174,7 +174,7 @@ async def test_audio_is_deleted_after_scoring_without_retention_consent() -> Non
     assert outcome.score.verdict is Verdict.ACCEPT
     assert outcome.stored_audio_key is None
     assert sink.objects == {}
-    after = set(Path(os.environ.get("TEMP", "/tmp")).glob("misk-voice-*"))
+    after = set(Path(os.environ.get("TEMP", "/tmp")).glob("sanad-voice-*"))
     assert after == before
 
 

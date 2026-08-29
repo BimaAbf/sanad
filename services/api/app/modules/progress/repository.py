@@ -46,12 +46,29 @@ UPSERT_ROLLUP = text("""
         updated_at        = now()
 """)
 
-#: `ON CONFLICT DO NOTHING` on the idempotency key is what makes an outbox
-#: drain safe. The client may replay the same batch as often as it likes.
+#: Deduplication on the idempotency key is what makes an outbox drain safe: the
+#: client may replay the same batch as often as it likes.
+#:
+#: This was `ON CONFLICT (idempotency_key, client_ts) DO NOTHING` and it raised
+#: `InvalidColumnReferenceError` on EVERY call -- `events_idempotency_uq` is on
+#: `(idempotency_key, server_ts)`, because a unique index on a partitioned table
+#: must contain the partition key and the partition key is `server_ts`. 0005's
+#: own docstring says `client_ts`; the DDL beneath it says `server_ts`. So
+#: `POST /events` 500'd on every batch, and no test saw it because the store is
+#: faked everywhere the service is tested.
+#:
+#: `ON CONFLICT (idempotency_key, server_ts)` would parse and still be wrong:
+#: `server_ts` defaults to `now()`, so a replay gets a different one and never
+#: conflicts. The guard has to be on the key alone. `events_idempotency_uq`
+#: leads on `idempotency_key`, so the EXISTS is an index seek, and the unique
+#: index remains the backstop for a true same-instant double insert.
 INSERT_EVENT = text("""
     INSERT INTO events (child_id, caregiver_id, name, props, client_ts, idempotency_key)
-    VALUES (:child_id, :caregiver_id, :name, CAST(:props AS jsonb), :client_ts, :idempotency_key)
-    ON CONFLICT (idempotency_key, client_ts) DO NOTHING
+    SELECT :child_id, :caregiver_id, :name, CAST(:props AS jsonb),
+           :client_ts, :idempotency_key
+    WHERE NOT EXISTS (
+        SELECT 1 FROM events WHERE idempotency_key = :idempotency_key
+    )
 """)
 
 SELECT_ROLLUPS = text("""

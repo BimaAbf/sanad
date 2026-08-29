@@ -30,7 +30,7 @@ from app.modules.identity.service import InvalidCredentials
 
 router = APIRouter(tags=["auth"])
 
-REFRESH_COOKIE = "misk_refresh"
+REFRESH_COOKIE = "sanad_refresh"
 
 
 def _client_ip(request: Request) -> str | None:

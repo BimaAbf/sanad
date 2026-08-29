@@ -5,7 +5,7 @@ One row per component. **Status** is one of `not started` · `in progress` ·
 sub-session's report — only after the orchestrator re-ran the gate command
 itself and read the real output.
 
-_Last updated: 2026-08-29 · after P09–P15_
+_Last updated: 2026-08-29 · after P09–P15, then a defect-and-tooling pass_
 
 | # | Component | Status | Branch | Tests | Coverage | Gates open |
 |---|---|---|---|---|---|---|
@@ -26,7 +26,35 @@ _Last updated: 2026-08-29 · after P09–P15_
 | P14 | C14 Clinician console | **partial** | `feat/p00-scaffold` | (in the 87) | — | no auth realm · no editors · no audit_log |
 | P15 | Infrastructure & CI | **partial** | `feat/p00-scaffold` | 18 guards | — | never applied, never deployed, CI never run |
 
-**853 API unit tests + 18 guard tests + 87 web tests, all passing.**
+**`just test` is green end to end for the first time: 863 API tests passed, 0
+failed**, then `COVERAGE GATE PASS: 30 critical file(s) at 100% branch
+coverage`, 32 tooling tests and 87 web tests. The Docker daemon was recovered
+(`com.docker.service` was stopped), migrations `0002`–`0006` applied cleanly on
+their first ever run against real Postgres — partitioning and dedupe index
+included — and the five integration tests that had never executed now pass 8/8.
+**BLOCKED.md #1 is closed.**
+
+**And running it end to end immediately found a real defect.** `POST /children`
+returned 500: `relation "caregiver_child" does not exist`. docs/02 §3 specifies
+that table, `identity/models.py` maps it, and `0003_children_consent` *mentions
+it in a comment* while never creating it — so every child-scoped ownership check
+was querying a table that did not exist. Invisible to 863 passing tests, because
+`repository.py` had no database to run against. Fixed in
+`0007_caregiver_child`, transcribed verbatim from docs/02 §3, as a new forward
+migration rather than an edit to an applied one. After it the whole platform
+walk works: OTP → RS256 token → `/me` → create child (mandatory-consent gate
+correctly refusing first, in Arabic, as RFC 9457) → consent ledger → Arabic
+stored byte-exact.
+
+**One more gap the walk exposed:** all four `/progress/*` routes return 503
+`Progress service is not configured` in any running instance —
+`set_progress_service_factory` is called by tests and by nothing in `app/`.
+
+What that did *not* do is write the tests that needed a database:
+`progress/repository.py` is still at 0%, `children/` at 34%, `identity/` at 37%,
+and the `ai_cannot_grant` database backstop, the export/erasure FK walk and the
+Postgres-level notification dedupe proof are all still unwritten. They are now
+possible rather than done.
 
 The branch-coverage gate now reports **PASS on 30 files** at 100% branch
 coverage — every `domain/` package plus `app/guardrails/`.
@@ -39,6 +67,95 @@ coverage — every `domain/` package plus `app/guardrails/`.
 > root. Both are fixed. Earlier PROGRESS entries claiming 100% branch coverage
 > were reading the pytest terminal report by hand; they were correct, but the
 > gate that was supposed to enforce them was not enforcing anything.
+
+### Since P15 — a defect pass and the tooling that was missing
+
+**A fourth scoring defect, fixed.** docs/04d §3 prices a vowel-length error at
+0.15 and writes it as a substitution. That substitution cannot occur here:
+unvowelised Arabic writes no short vowels, so a shortened vowel arrives as a
+*deleted long vowel*, which `similarity.deletion_cost` priced as an ordinary
+indel at 0.8 — 5.3× the documented price for the one class the document calls
+"almost never meaningful". Stacked with one other expected process it moved a
+child out of the accept band: راس /rAs/ produced as /rt/ scored 0.633, a
+`retry`, against 0.850 at the documented costs.
+
+Now priced at 0.15 when the deleted long vowel sits **between two consonants**
+(CVC → CC), deletion only. Both restrictions were established by running the
+62-pair corpus, not chosen: a cheap long-vowel *insertion* lets the aligner slide
+unrelated strings together and pushed صابونة/ترابيزة from 0.464 to 0.557, across
+the accept threshold. The six `vowel_shortening` rows move to 0.95–0.98; no
+non-match row changes band. **Unreviewed by an SLT, like the closed-vocabulary
+rule — REVIEW-QUEUE #8.**
+
+**`just guards` ran four of the five guards.** `destructive_migration.py` was
+added in P15 and wired into CI but not into the justfile, so a local `just
+guards` reported green on a tree CI would reject. Fixed, with a comment saying
+the two lists must match.
+
+**`just up` — the whole stack, one command, one log stream.** `tools/dev/`:
+a preflight that names every missing prerequisite *and what that absence breaks*
+(never a silent degradation), containers, migrations, uvicorn and Next as child
+processes, and every log line from all of them in one timestamped colour-coded
+stream — structlog JSON re-rendered as prose, one line per HTTP request with a
+correlatable request id, the raw stream teed to `logs/dev-<timestamp>.log`, and
+a request summary on Ctrl-C. Runs and reports correctly with Docker down, which
+is how it was developed. 18 tests over the two pure modules.
+
+**`just voice-script` — the document REVIEW-QUEUE #10 was missing.** SETUP.md §4
+said "script provided by the agent" and no script existed, which is part of why
+the longest-lead item had not started. `tools/voice_render/recording_script.py`
+assembles it from the repo's own curriculum, with a phonetic-coverage check that
+can fail (all 26 phonemes are covered today) and a duration estimate that counts
+takes. It reports that the curriculum yields ~15 minutes against a 20-minute
+floor and says what the gap has to be filled with, rather than padding it with
+invented Arabic. Carries a DO-NOT-RECORD banner while `seeds/curriculum.py`
+`REVIEWED_BY` is empty. 12 tests.
+
+**A defect in the web image, found without a daemon.** `apps/web/Dockerfile`
+copies `.next/standalone` and runs `node apps/web/server.js`; `next.config.mjs`
+never asked Next to emit a standalone build, so the image build would have
+failed at the `COPY` — reading as a broken Dockerfile rather than a missing
+config key. The config now emits standalone when `NEXT_OUTPUT=standalone`, which
+the Dockerfile's build stage sets; gated on the env var because `next start`
+refuses to serve a standalone build and an unconditional setting would break
+every local production run. Both paths verified: the plain build feeds
+`next start`, and the gated build lands `server.js` at exactly the path the
+`CMD` expects. **`pnpm --filter @sanad/web build` had also never been run** — it
+succeeds, 13 routes.
+
+**`just up-prod` — the stack in its deployed shape.** Production settings from a
+generated `.env.production-local` (`just prod-env`: RS256 keypair, real pepper
+and invite secret, because `_check_production_secrets` correctly refuses the
+`local-dev-` placeholders), no reloader, two uvicorn workers, Next serving a
+build, `/docs` correctly 404. Verified running; a multi-line PEM round-trips
+through a quoted `.env` value and RS256 signs and verifies. One bug found doing
+it: `uv run --env-file` mangles an absolute path when the repo path contains
+spaces (`E:\Summer Academy - DELL\…` came back as `DELLRevamped.env…`), so the
+runner passes the relative form the `migrate-test` recipe already used.
+
+**`just` did not work on Windows at all.** Every recipe failed with `could not
+find the shell 'sh'` — just defaults to `sh`, and Git Bash's `sh.exe` is not on
+PATH by default. Earlier sessions ran recipes from a shell that happened to have
+it, so this had never surfaced. The justfile now sets `windows-shell` to
+PowerShell, verified for exit-code propagation, early exit on a failing line,
+and not mistaking stderr output for failure. `just --list`, `guards`, `lint`,
+`test-quick`, `voice-script`, `prod-env` and `up` all re-run green from a plain
+PowerShell prompt.
+
+**Procedures for the two urgent gates.** `docs/setup/` — 01 the Nour voice
+(casting brief, the vowelisation dependency, the script, a release checklist,
+the listening test, and the honest note that `renderer.py` does not exist yet),
+02 Groq and the two model licences (the key is ten minutes; the DPA is the thing
+that actually blocks, and doing the first and calling #13 closed is the failure
+mode), 03 everything else, and **04 running it in its deployed shape** — which
+also states the ceiling plainly: only four routers are mounted (identity,
+children, voice, progress), there are no content/assessment/learning/session
+tables in any migration, and `just seed` correctly exits 1 because there is
+nowhere to put the curriculum. The platform tier runs end to end; the learning
+and assessment tiers have domain logic at 100% branch coverage and no HTTP
+surface or persistence yet.
+
+---
 
 ### What P05 is missing, stated plainly
 
@@ -227,13 +344,13 @@ and P07 were built and fully tested before P03 was started.
 
 | Criterion | Result | Command / evidence |
 |---|---|---|
-| `just bootstrap && just dev` brings up api :8000 and web :3000 | **PASS** (with one caveat) | `just dev` verified end to end: turbo runs `@misk/api:dev` and `@misk/web:dev` together; `:8000/health` 200, `:8000/health/ready` 200, and `/home`, `/play`, `/console` all 200. **Caveat:** not run from a genuinely clean clone — there is no git remote yet. |
+| `just bootstrap && just dev` brings up api :8000 and web :3000 | **PASS** (with one caveat) | `just dev` verified end to end: turbo runs `@sanad/api:dev` and `@sanad/web:dev` together; `:8000/health` 200, `:8000/health/ready` 200, and `/home`, `/play`, `/console` all 200. **Caveat:** not run from a genuinely clean clone — there is no git remote yet. |
 | `GET /health` returns 200 with no database dependency | **PASS** | With Redis stopped: `{"status":"ok","version":"0.1.0"}` HTTP 200 |
 | `GET /health/ready` reports db, redis and s3 individually | **PASS** | Healthy: `{"status":"ok","checks":{"db":{"status":"ok"},"redis":{"status":"ok"},"s3":{"status":"ok"}}}` 200. Redis stopped: `{"status":"degraded","checks":{"redis":{"status":"error","reason":"TimeoutError"}}}` 503 |
 | Unhandled exception → valid RFC 9457 with `message_ar`, never a stack trace | **PASS** | `tests/unit/test_health_and_errors.py::test_unhandled_exception_is_problem_details` asserts 500, `application/problem+json`, `message_ar` present, and that neither `ValueError`, the exception text, nor `Traceback` appears in the body |
 | `just lint` passes: ruff, mypy --strict, eslint, stylelint | **PASS** | `ruff check` All checks passed · `ruff format --check` 25 files already formatted · `mypy --strict app` Success: no issues found in 16 source files · `tsc --noEmit` exit 0 · `stylelint` exit 0 |
 | stylelint demonstrably fails on `margin-left: 4px` | **PASS** | `tools/guards/fixtures/physical-properties.css.fixture` → exit 2, 6 errors, each naming the logical replacement. Control fixture → exit 0. Asserted by `tools/guards/test_guards.py::test_stylelint_bans_physical_properties` |
-| A missing required env var causes a clear startup failure naming the variable | **PASS** | Observed for real when alembic ran from the wrong directory: `ConfigurationError: Misk API cannot start … MISK_DATABASE_URL: Field required …`. Asserted by `test_config.py::test_missing_required_variable_names_it` |
+| A missing required env var causes a clear startup failure naming the variable | **PASS** | Observed for real when alembic ran from the wrong directory: `ConfigurationError: Sanad API cannot start … SANAD_DATABASE_URL: Field required …`. Asserted by `test_config.py::test_missing_required_variable_names_it` |
 | Web renders RTL, Arabic at 17px/1.9, no layout shift | **PASS** | In-browser: `dir="rtl"`, `lang="ar-EG"`, `font-size 17px`, `line-height 32.3px` (ratio 1.90), all four IBM Plex Sans Arabic faces `loaded`, **cumulative layout shift 0** |
 
 ### Additionally delivered beyond the prompt

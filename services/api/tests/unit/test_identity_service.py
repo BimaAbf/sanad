@@ -691,7 +691,7 @@ async def test_no_secret_appears_in_logs_during_a_full_auth_flow(
     handler = logging.StreamHandler(buffer)
     root = logging.getLogger()
     previous_level = root.level
-    configure_logging(level="DEBUG", service="misk-api")
+    configure_logging(level="DEBUG", service="sanad-api")
     root.addHandler(handler)
     root.setLevel(logging.DEBUG)
     try:
@@ -739,7 +739,7 @@ async def test_the_log_leak_test_would_catch_a_real_leak(sms: NullSms) -> None:
     buffer = io.StringIO()
     handler = logging.StreamHandler(buffer)
     root = logging.getLogger()
-    configure_logging(level="DEBUG", service="misk-api")
+    configure_logging(level="DEBUG", service="sanad-api")
     root.addHandler(handler)
     root.setLevel(logging.DEBUG)
     try:

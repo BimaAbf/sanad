@@ -1,3 +1,3 @@
-import config from "@misk/config/eslint";
+import config from "@sanad/config/eslint";
 
 export default config;

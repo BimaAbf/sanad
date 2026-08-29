@@ -559,7 +559,13 @@ def test_a_clean_run_returns_the_value_and_records_every_layer() -> None:
 
 
 def test_every_decision_point_in_the_enum_is_registered() -> None:
-    """A decision point missing from the table has no declared guardrails."""
+    """A decision point missing from the table has no declared guardrails.
+
+    The last two are the chat surfaces, added with the `ai_decision_point`
+    values in migration 0009. `caregiver_chat` produces prose a parent reads;
+    `child_chat` selects one id from a closed set of reviewed phrases -- which
+    is why one carries ClinicalSafetyLayer and the other CandidateSetLayer.
+    """
     assert set(REQUIRED_LAYERS) == {
         "pgee_next_item",
         "pgee_interpret",
@@ -569,6 +575,8 @@ def test_every_decision_point_in_the_enum_is_registered() -> None:
         "tutor_judge",
         "tutor_summary",
         "safety_classify",
+        "caregiver_chat",
+        "child_chat",
     }
 
 
@@ -756,7 +764,16 @@ def test_the_model_id_and_effort_routing_match_the_specification() -> None:
 
 
 async def test_the_built_request_matches_the_anthropic_contract() -> None:
-    gateway = LlmGateway(live=False)
+    """The Anthropic shape, asserted against an Anthropic-configured gateway.
+
+    The provider is passed explicitly because the DEFAULT is now Groq (docs/12
+    SS2 routes every decision point there). This test is about the Anthropic
+    contract specifically, so it has to ask for it; the Groq contract has its own
+    assertions in `tests/unit/test_gateway_groq.py`.
+    """
+    from app.ai.gateway import Provider
+
+    gateway = LlmGateway(live=False, provider=Provider.ANTHROPIC)
     await gateway.call_structured(
         decision_point="pgee_report",
         schema_model=Interpretation,
@@ -786,14 +803,27 @@ def test_fixture_keys_are_deterministic_and_content_addressed() -> None:
 
 
 async def test_the_live_path_refuses_rather_than_pretending() -> None:
-    """Reaching the provider without a key must be loud, not a silent pass."""
+    """Reaching the provider without a key must be loud, not a silent pass.
+
+    The invariant is unchanged; the mechanism is not. This used to assert a
+    `NotImplementedError` because the live path was a stub. Now that it is
+    implemented, a keyless live call fails as `Outcome.PROVIDER_ERROR` with no
+    value — which is the same refusal expressed the way every other provider
+    failure is expressed, so no call site needs an exception path for it.
+
+    What is actually being defended here is the second assertion: `result.ok`
+    must be false. A live call that could not reach a model must never come
+    back looking like one that did.
+    """
     gateway = LlmGateway(live=True, fixtures=FixtureStore(root=None))
-    with pytest.raises(NotImplementedError, match="fixtures by design"):
-        await gateway.call_structured(
-            decision_point="pgee_interpret",
-            schema_model=Interpretation,
-            volatile={"nothing": "recorded-for-this"},
-        )
+    result = await gateway.call_structured(
+        decision_point="pgee_interpret",
+        schema_model=Interpretation,
+        volatile={"nothing": "recorded-for-this"},
+    )
+    assert result.outcome is GatewayOutcome.PROVIDER_ERROR
+    assert not result.ok
+    assert result.value is None
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
-# مِسك · Misk — AI-Assisted Arabic Early-Learning & Developmental Tracking Platform
+# سند · SANAD — AI-Assisted Arabic Early-Learning & Developmental Tracking Platform
 
-> Working name: **مِسك (Misk)**. Arabic-first (Egyptian dialect) e-learning + developmental-progress platform for children with Down syndrome and their caregivers.
+> Working name: **سند (Sanad)**. Arabic-first (Egyptian dialect) e-learning + developmental-progress platform for children with Down syndrome and their caregivers.
 
 This folder is the complete architecture package: high-level design, per-component detailed design, data model, AI architecture with guardrails, API contracts, security/compliance, infrastructure, and **copy-paste build + test prompts** so each component can be developed and verified in isolation before integration.
 
@@ -25,6 +25,14 @@ This folder is the complete architecture package: high-level design, per-compone
 | 10 | [Test Prompts & Test Plan](10-test-prompts.md) | Per-component test prompt, AI eval harness, red-team suite, UAT |
 | 11 | [Integration Plan & Roadmap](11-integration-roadmap.md) | Wiring order, integration gates, 14-week MVP plan, launch checklist |
 | **12** | **[Stack Revision: Groq & Self-Hosted Voice](12-stack-revision-groq-selfhosted-voice.md)** | **Supersedes the provider choices in 03, 04d, 08 and 00 §C/D1/D4.** Groq free-tier capacity analysis, per-decision-point model routing, VoxCPM2 voice cloning, Qwen3-ASR self-hosting, revised cost model |
+
+### Not architecture, but next to it
+
+| Folder | What |
+|---|---|
+| [`setup/`](setup/README.md) | Procedures for the things only a human can do — casting and recording the Nour voice, Groq's data terms and the two model licences, the remaining credentials. `SETUP.md` at the repo root is the register; this is the how. |
+| [`runbooks/`](runbooks/README.md) | One file per operational situation from 08 §7. None rehearsed — there is no deployed environment. |
+| [`adr/`](adr/) | Decision records. 001 and 011–017 exist; 002–010 are referenced by code and were deliberately not back-filled (BLOCKED.md #5). |
 
 > **Read 12 alongside 03 and 04d.** The architecture is unchanged — every guardrail, fallback and closed-set constraint stands. Only the providers behind C15 (LLM Gateway) and C08 (Voice Gateway) change, which is exactly what those components were designed to allow.
 

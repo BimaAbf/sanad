@@ -45,7 +45,7 @@ def test_no_allowed_field_contains_a_forbidden_substring() -> None:
 
 
 def test_rendered_record_is_json_with_request_id(capsys) -> None:  # type: ignore[no-untyped-def]
-    configure_logging(level="DEBUG", service="misk-api")
+    configure_logging(level="DEBUG", service="sanad-api")
     set_request_id("req-123")
     structlog.get_logger("t").info("event_name", child_id="c1", phone_number="+201234")
     captured = capsys.readouterr().out.strip().splitlines()[-1]

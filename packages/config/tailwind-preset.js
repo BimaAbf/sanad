@@ -73,7 +73,7 @@ const preset = {
       },
 
       transitionDuration: { fast: "120ms", base: "220ms", slow: "400ms" },
-      transitionTimingFunction: { misk: "cubic-bezier(.2,.7,.3,1)" },
+      transitionTimingFunction: { sanad: "cubic-bezier(.2,.7,.3,1)" },
 
       fontFamily: {
         sans: [

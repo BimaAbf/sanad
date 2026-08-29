@@ -64,7 +64,7 @@ class TwilioSms:
     async def send(self, *, phone_e164: str, message: str) -> bool:
         raise NotImplementedError(
             "TwilioSms needs credentials — see SETUP.md §2. "
-            "Set MISK_SMS_PROVIDER=null to run without SMS."
+            "Set SANAD_SMS_PROVIDER=null to run without SMS."
         )
 
 
@@ -79,7 +79,7 @@ class LocalAggregatorSms:
     async def send(self, *, phone_e164: str, message: str) -> bool:
         raise NotImplementedError(
             "LocalAggregatorSms needs credentials — see SETUP.md §2. "
-            "Set MISK_SMS_PROVIDER=null to run without SMS."
+            "Set SANAD_SMS_PROVIDER=null to run without SMS."
         )
 
 

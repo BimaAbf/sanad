@@ -7,7 +7,7 @@ import { DIRECTION, LOCALE } from "@/i18n";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "مِسك",
+  title: "سند · SANAD",
   description: "رفيقك في رحلة طفلك",
 };
 

@@ -47,6 +47,7 @@ test-results/
 
 # --- local data ---
 .docker-data/
+logs/
 *.sqlite3
 .DS_Store
 Thumbs.db

@@ -25,7 +25,7 @@ from app.core.logging import get_request_id
 logger = structlog.get_logger(__name__)
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
-PROBLEM_BASE_URI = "https://misk.app/problems"
+PROBLEM_BASE_URI = "https://sanad.app/problems"
 
 GENERIC_MESSAGE_AR = "حصلت مشكلة مؤقتة. جرّب تاني بعد شوية."
 

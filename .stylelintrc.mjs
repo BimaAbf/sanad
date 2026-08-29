@@ -1,3 +1,3 @@
-import config from "@misk/config/stylelint";
+import config from "@sanad/config/stylelint";
 
 export default config;

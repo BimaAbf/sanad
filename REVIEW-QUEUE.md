@@ -20,7 +20,7 @@ _Last updated: 2026-08-29 · after P09–P15_
 | **5** | The mastery rule needed an unreviewed addition | Stage 3 gate | Clinician + you | ~1 hour to decide |
 | **6** | 88 curriculum labels, vowelisation and phonemes | Stage 3, Stage 5 | Native speaker | ~3 days |
 | **7** | Red-team corpus and blocked-category vocabulary | Stage 4 gate | Independent red-teamer | ~1 day |
-| **8** | 60 pronunciation-scoring verdicts, and one addition to the scorer | Stage 5 | Speech-language therapist | ~half a day |
+| **8** | 60 pronunciation-scoring verdicts, and **two** additions to the scorer | Stage 5 | Speech-language therapist | ~half a day |
 | **9** | The 0.55 acceptance threshold is uncalibrated | Voice go-live | Pilot centre, with consent | 30 recordings |
 | **10** | The Nour voice: casting, recording, a perpetual licence | **Stage 5, long lead time** | You | weeks |
 | **11** | VoxCPM2 Arabic listening test | Stage 5 voice gate | Native Egyptian speaker | ~half a day |
@@ -264,10 +264,31 @@ certainty that it is a different word rather than an approximation of the target
 
 That rule is not in docs/04d. It is mine, and it changes what a child is told.
 
-**A second thing you should know.** The `vowel length 0.15` cost in docs/04d is
-unreachable in practice: unvowelised Arabic writes no short vowels, so a
-shortened vowel arrives at the scorer as a deleted long vowel priced at 0.8. Not
-a bug, but the cost table has a row that never fires today.
+**A second addition, and it needs the same ruling.** The `vowel length 0.15`
+cost in docs/04d was unreachable in practice: unvowelised Arabic writes no short
+vowels, so a shortened vowel arrives at the scorer as a *deleted long vowel*,
+which was priced at 0.8 — 5.3x what the document sets for the one class it calls
+"almost never meaningful". Stacked with one other expected process it pushed a
+child out of the accept band: راس /rAs/ produced as /rt/ (vowel shortened, final
+/s/ stopped) scored 0.633, a `retry`, where the documented costs give 0.850.
+
+`similarity.deletion_cost` now prices a long vowel deleted **between two
+consonants** at 0.15 — CVC → CC, which is what shortening looks like in an
+unvowelised transcript. Two restrictions, both established by running the
+corpus:
+
+* only between consonants — a long vowel deleted at a word edge changes the
+  shape of the word, and stays at 0.8;
+* deletion only, never insertion — a cheap *inserted* long vowel lets the
+  aligner slide unrelated strings together, and measurably does: صابونة against
+  ترابيزة rises from 0.464 to 0.557 and a genuine non-match crosses the accept
+  threshold.
+
+The six `vowel_shortening` corpus rows move from 0.73–0.87 to 0.95–0.98. No
+non-match row changes band. **Like the closed-vocabulary rule above, this is
+mine and it changes what a child is told.** Question 2 applies to it: should a
+child who shortens the vowel of a word they otherwise said correctly be told
+they were right?
 
 **What happens if this stays open.** The scorer ships with verdicts nobody
 clinically qualified has agreed to. Given accept-on-effort the worst case for
@@ -306,6 +327,11 @@ Recorded in `docs/adr/011-voice-scoring.md` D4.
 docs/12 §3.1 needs 20–30 minutes of studio-quality recording from a real
 Egyptian woman — ideally an early-intervention specialist, or a mother who
 naturally speaks to small children — to clone into the Nour voice.
+
+**Step-by-step: [`docs/setup/01-nour-voice.md`](docs/setup/01-nour-voice.md).**
+`just voice-script` now generates the document you hand the studio, from the
+repo's own curriculum, with a phonetic-coverage check. It carries a DO-NOT-RECORD
+banner until #6 closes, because the labels' vowelisation is still mechanical.
 
 **Three things, and the third is a contract.**
 
@@ -383,6 +409,8 @@ you that an 8-second wait is too short for a particular child. A parent can."*
 | **Blocks** | **Any pilot traffic**, including pseudonymised. Not development. |
 | **Who** | You, and probably a lawyer |
 
+**Step-by-step: [`docs/setup/02-groq-and-model-licences.md`](docs/setup/02-groq-and-model-licences.md).**
+
 docs/12 §2 is unambiguous: *"Groq's free-tier data terms are not established…
 Before any pilot traffic — even pseudonymised — someone must read those and
 confirm: no training on our data, a stated retention period, and a signed DPA.
@@ -395,6 +423,51 @@ Two more, from docs/12 §3.4, both load-bearing:
 - **Qwen3-ASR-1.7B** — commercial use, and distribution of a fine-tuned
   derivative. The fine-tune is the strategic argument in docs/12 §3.2; if the
   licence forbids it, that argument collapses.
+
+---
+
+## #14 — The child app's pictures, its 25 invented letter keywords, and four manifest fields
+
+| | |
+|---|---|
+| **Status** | 🔴 open · 0 days |
+| **Blocks** | Stage 3 (any family sees `/play`) |
+| **Where** | `apps/web/src/content/curriculum.ts`, `apps/web/src/components/art/objects.tsx`, `apps/web/src/lib/manifest.ts` |
+| **Effort** | ~2 days, plus one session with children |
+
+`/play` used to be one hard-coded activity pointing at two `.svg` files that did
+not exist. It is now the five `activity_kind` values, drawing 56 illustrations
+from the 88-skill curriculum. Three parts of that need a person.
+
+**1. Fifty-six drawings nobody has shown to a child.** They are vectors in the
+bundle rather than CDN assets, for the reasons in `components/art/frame.tsx`,
+and they follow the rules that can be checked mechanically — one object, heavy
+outline, no text inside, legible without colour. What cannot be checked
+mechanically is whether an Egyptian four-year-old looks at the drawing for
+`hh_bag` and says **شنطة**. Several are culturally specific in exactly the way
+that goes wrong quietly: `hh_table` (ترابيزة), `hh_shoes` (جزمة),
+`hh_water_glass` (كوباية مية) as distinct from `hh_cup` (كوباية). A
+misrecognised picture does not fail — it records the child as not knowing a word
+they know perfectly well, and BKT then schedules more of it.
+
+**2. Twenty-five letter keywords I invented.** `docs/02 §10.1` gives three
+(أ → أسد, ب → بطة, ت → تفاحة) and those are transcribed. The other 25 — ث → ثعلب,
+ج → جمل, ح → حصان and so on — are an agent's choices, made for concreteness. A
+keyword carries the letter's *sound*, so choosing one is a phonics decision and
+belongs to a speech therapist. `REVIEWED_LETTER_KEYWORDS` names the three that
+are real; a test asserts `REVIEWED_BY` in that file is still empty.
+
+**3. Eighty-eight `alt_ar` strings**, agent-written. They are the only channel a
+caregiver's screen reader has for these pictures, and `docs/06 §5` makes alt
+text a mandatory column rather than a nicety.
+
+**One decision that is not a review, and is yours.** `docs/04c §C05`'s session
+manifest carries enough to render `listen_point` and nothing else, while
+`docs/01 §1`'s `activity_kind` enum has five values. I added four optional
+fields — `card`, `bins`, `beats` and `spoken_ar` — marked `ADDITION` in
+`lib/manifest.ts` where they are declared. They should either move into the C05
+contract or the other four kinds should be cut from the enum; carrying an enum
+value the manifest cannot express is the state that produces a blank screen.
 
 ---
 

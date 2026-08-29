@@ -20,15 +20,15 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: process.env.MISK_E2E_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.SANAD_E2E_BASE_URL ?? "http://localhost:3000",
     locale: "ar-EG",
     timezoneId: "Africa/Cairo",
     trace: "on-first-retry",
   },
   // `exactOptionalPropertyTypes` is on, so an absent web server is an empty
-  // list rather than `undefined`: CI points MISK_E2E_BASE_URL at a deployed
+  // list rather than `undefined`: CI points SANAD_E2E_BASE_URL at a deployed
   // preview and must not also start a dev server.
-  webServer: process.env.MISK_E2E_BASE_URL
+  webServer: process.env.SANAD_E2E_BASE_URL
     ? []
     : [
         {

@@ -36,7 +36,7 @@ from app.modules.identity.sms import SmsProvider
 
 logger = structlog.get_logger(__name__)
 
-OTP_MESSAGE_AR = "كود الدخول لمِسك: {code}\nالكود صالح ٥ دقايق. متديهوش لحد."
+OTP_MESSAGE_AR = "كود الدخول لسند: {code}\nالكود صالح ٥ دقايق. متديهوش لحد."
 
 
 class InvalidCredentials(Unauthorised):

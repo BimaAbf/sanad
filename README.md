@@ -1,4 +1,4 @@
-# مِسك · Misk
+# سند · SANAD
 
 Arabic-first (Egyptian colloquial) AI learning and developmental-tracking
 platform for children with Down syndrome and their caregivers.
@@ -31,12 +31,34 @@ Python is **not** a prerequisite: `uv` fetches the pinned 3.12 toolchain.
 
 ```
 just bootstrap
-just dev
+just up
 ```
 
 `bootstrap` copies `.env.example` → `.env`, installs both toolchains, syncs the
 fonts, starts Postgres/Redis/MinIO/Mailhog, and migrates both databases.
-`dev` runs the API on **:8000** and the web app on **:3000**.
+
+`up` is the one command for everything after that. It runs a preflight that
+names every missing prerequisite **and what that absence breaks**, brings up the
+containers, migrates, starts the API on **:8000** and the web app on **:3000**,
+and streams every log line from all of them into one colour-coded view — with
+the API's structured JSON re-rendered as prose, one line per HTTP request
+(`503 GET /voice/health 32.8ms req=0d20cb28`), and the same stream written raw
+to `logs/dev-<timestamp>.log`. Ctrl-C stops the children and prints a request
+summary. `just up --help` for the flags; `just dev` is still there if you want
+the plain turbo runner.
+
+**To run it the way it would run when deployed** — production settings, a real
+RS256 keypair, no reloader, two uvicorn workers, Next serving a built app and
+`/docs` correctly disabled:
+
+```
+just prod-env      # once: writes .env.production-local, never overwrites
+just up-prod
+```
+
+That is the same process invocation the container images use, without needing a
+Docker daemon to build them. What it can and cannot exercise today is in
+[`docs/setup/04-running-it-deployed.md`](docs/setup/04-running-it-deployed.md).
 
 | URL | What |
 |---|---|
@@ -46,7 +68,7 @@ fonts, starts Postgres/Redis/MinIO/Mailhog, and migrates both databases.
 | <http://localhost:8000/health> | liveness — no dependencies |
 | <http://localhost:8000/health/ready> | readiness — db, redis, s3 individually |
 | <http://localhost:8000/docs> | OpenAPI (disabled in production) |
-| <http://localhost:59001> | MinIO console (`miskminio` / `miskminio-dev-secret`) |
+| <http://localhost:59001> | MinIO console (`sanadminio` / `sanadminio-dev-secret`) |
 | <http://localhost:58025> | Mailhog |
 
 Host ports are offset into the 5xxxx range so this stack coexists with another
@@ -55,17 +77,25 @@ project's Postgres/Redis/MinIO on the same machine.
 ### 2. Check it
 
 ```
-just test
+just test        # the CI gate, verbatim
+just test-quick  # the same minus the five tests that need a live Postgres
 just lint
 just guards
 ```
 
+**It runs without Docker, and says so.** If the daemon is not answering, `just
+up` still starts the API — `/docs`, `/health` and every pure route work — and
+prints exactly which routes will fail and why, rather than coming up quietly
+broken. Five integration tests fail for the same reason; that is BLOCKED.md #1.
+
 ### 3. You do not need an API key
 
 The architecture runs on fixtures and deterministic fallbacks by design.
-Credentials are needed at four specific gates only — see [`SETUP.md`](SETUP.md) §2.
+Credentials are needed at four specific gates only — see [`SETUP.md`](SETUP.md) §2
+for which, and [`docs/setup/`](docs/setup/README.md) for how to obtain each one.
 If a key is absent the system runs in fixture mode and says so; it never stubs a
-key with a fake value to make a test pass.
+key with a fake value to make a test pass. `just up` prints the whole table on
+startup: which are set, and for each absent one, the mode it runs in instead.
 
 ---
 
@@ -78,6 +108,9 @@ services/api/        FastAPI · app/core, app/ai, app/guardrails, app/modules
 packages/config/     shared eslint · tsconfig · tailwind preset · stylelint
 packages/ui/         shared components + tokens
 packages/api-client/ generated from openapi.json — do not hand-edit
+tools/dev/          `just up` — preflight, process supervision, one log stream
+tools/voice_render/ offline TTS render plan + `just voice-script`
+tools/guards/       the five CI guards, each with a violation fixture
 infra/               terraform + docker
 tools/guards/        the four CI guard checks, and the fixtures proving they fire
 tools/lint/          banned-terms lint, branch-coverage gate

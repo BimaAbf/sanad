@@ -77,6 +77,22 @@ REQUIRED_LAYERS: dict[str, list[type]] = {
     "tutor_judge": [SchemaLayer, ClosedEnumLayer, ConservatismLayer],
     "tutor_summary": [SchemaLayer, ClinicalSafetyLayer, ReadingLevelLayer],
     "safety_classify": [SchemaLayer, ClinicalSafetyLayer],
+    # The caregiver assistant writes prose a parent reads about their own child,
+    # so it carries the same three layers as the PGEE report minus numeric
+    # fidelity -- there are no engine-computed numbers in a chat answer to check
+    # it against, and NumericEqualityLayer with an empty number set would pass
+    # everything while looking like a guard.
+    "caregiver_chat": [
+        SchemaLayer,
+        ClinicalSafetyLayer,
+        ReadingLevelLayer,
+        PiiLeakLayer,
+        RedFlagLayer,
+    ],
+    # The child surface generates nothing: it selects one id from CHILD_PHRASES.
+    # CandidateSetLayer is what makes "Nour can only say a reviewed phrase" true
+    # rather than aspirational.
+    "child_chat": [SchemaLayer, ClosedEnumLayer, CandidateSetLayer, RedFlagLayer],
 }
 
 

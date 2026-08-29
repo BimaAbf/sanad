@@ -1,7 +1,7 @@
 [project]
-name = "misk-api"
+name = "sanad-api"
 version = "0.1.0"
-description = "Misk API - Arabic-first learning and developmental tracking for children with Down syndrome"
+description = "Sanad API - Arabic-first learning and developmental tracking for children with Down syndrome"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115.6",
@@ -32,6 +32,21 @@ dependencies = [
     # Windows ships no system tz database; Africa/Cairo must resolve everywhere
     # the code runs, not only in the Linux container.
     "tzdata>=2024.2",
+    # The single provider SDK. Only app/ai/gateway.py may construct a client
+    # from it; tools/guards/single_anthropic_client.py enforces that.
+    "anthropic>=0.69",
+    # The ASR transport speaks Groq's OpenAI-compatible endpoint over plain
+    # HTTP rather than the Groq SDK, so the voice module never gains a provider
+    # client -- docs/04d §5 keeps that path away from the gateway entirely.
+    "httpx>=0.28.1",
+    # Orchestration. LangGraph drives the two stateful graphs (recommendation,
+    # chat); langchain-core supplies the Runnable/Retriever interfaces the
+    # gateway adapter implements. Deliberately NOT `langchain-groq` or
+    # `langchain-anthropic`: either would construct a provider client outside
+    # app/ai/gateway.py, which tools/guards/single_anthropic_client.py forbids
+    # and which would bypass redaction, guardrails and the budget check.
+    "langchain-core>=1.0",
+    "langgraph>=1.0",
 ]
 
 [dependency-groups]

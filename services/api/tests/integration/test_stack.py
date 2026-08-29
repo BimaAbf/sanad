@@ -81,8 +81,8 @@ async def test_probes_report_error_without_raising(settings: Settings) -> None:
 
 async def test_redis_client_is_reused(settings: Settings, _stack: None) -> None:
     assert init_redis(settings) is get_redis()
-    await get_redis().set("misk:test", "1", ex=5)
-    assert await get_redis().get("misk:test") == "1"
+    await get_redis().set("sanad:test", "1", ex=5)
+    assert await get_redis().get("sanad:test") == "1"
 
 
 async def test_uninitialised_accessors_raise_clearly() -> None:

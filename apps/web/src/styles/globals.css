@@ -182,7 +182,7 @@ body {
  * the eye, not a flash that demands it. The @media block above disables it
  * entirely under prefers-reduced-motion.
  */
-@keyframes misk-pulse {
+@keyframes sanad-pulse {
   0%,
   100% {
     opacity: 1;
@@ -190,5 +190,86 @@ body {
 
   50% {
     opacity: 0.72;
+  }
+}
+
+/*
+ * The rest of the child app's motion.
+ *
+ * Every duration here is >= 400ms, which is 2.5Hz — below the 3Hz ceiling
+ * docs/06 4 sets for seizure risk, and far below it for the looping ones.
+ * The @media (prefers-reduced-motion) block above disables all of them
+ * wholesale; nothing in this file is required for a screen to be legible.
+ */
+
+/* The correct choice at ladder rung 3: a ring that breathes, not a flash. */
+@keyframes sanad-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px var(--c-primary-soft);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px var(--c-primary-soft);
+  }
+}
+
+/* One-shot entrance for a new activity. 400ms, the docs/06 4 ceiling. */
+@keyframes sanad-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * Celebration. Two gentle bounces and done.
+ *
+ * docs/06 4: "celebration is proportionate - a brief character animation and
+ * one warm phrase. Confetti and fanfare become noise within a week and add
+ * cognitive load." So this is a scale, not a particle system.
+ */
+@keyframes sanad-cheer {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  30% {
+    transform: scale(1.12);
+  }
+
+  60% {
+    transform: scale(1.04);
+  }
+}
+
+/* Nour's mouth while speaking. Slow enough to read as talking, not flickering. */
+@keyframes sanad-speak {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  50% {
+    transform: scaleY(0.55);
+  }
+}
+
+/* A sticker landing on the board at the end of a session. */
+@keyframes sanad-land {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }

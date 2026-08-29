@@ -2,55 +2,80 @@
 
 Anything the orchestrator cannot proceed on, and what would unblock it.
 
-_Last updated: 2026-08-29 · after P09–P15_
+_Last updated: 2026-08-29 · after P09–P15, then a defect-and-tooling pass_
+
+> **#1 is closed.** The Docker daemon is running, all six migrations have been
+> applied, and `just test` is green end to end for the first time. There is no
+> hard blocker left — #2–#5 change what results *mean*, or need a person or an
+> account.
 
 ---
 
-## 1. The Docker daemon stopped and did not recover
+## 1. ~~The Docker daemon~~ — RESOLVED 2026-08-29
 
-**This is the only hard blocker.**
+**Was the only hard blocker. It is closed.**
 
-`docker info` began hanging indefinitely partway through P01. It survived a full
-Docker Desktop process kill, a `wsl --shutdown`, and a manual start of the
-`docker-desktop` WSL distro (which did come back to `Running` — the daemon still
-did not answer).
+`com.docker.service` was `StartMode: Manual`, `State: Stopped` — that service is
+what creates the named pipe, which is why `docker info` reported the pipe absent
+rather than a wedged daemon. `Start-Service com.docker.service` from an elevated
+PowerShell, then Docker Desktop, restored it. Procedure:
+`docs/setup/04-running-it-deployed.md` §1.
 
-**Retried at the start of P09.** The symptom has changed and has not improved:
-the command now returns immediately with
+**One real defect had to be fixed on the way.** `docker compose up -d --wait`
+failed with `container sanad-minio-init-1 exited (0)` while every container was
+healthy: `--wait` treats *any* container that exits as a failed start, including
+a one-shot bucket-creator that exits 0 having done its job. That broke both
+`just bootstrap` and `just up`. `minio-init` now carries `profiles: ["init"]` so
+it is out of the default `up`, and `bootstrap` runs it explicitly with
+`docker compose run --rm minio-init`, which waits for completion and returns its
+exit code.
 
-```
-failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine:
-The system cannot find the file specified.
-```
+### What ran, and what it proved
 
-Starting `Docker Desktop.exe` did not bring the named pipe back. So it is no
-longer a hang, it is an absence — which rules out a wedged daemon and points at
-the Desktop installation itself.
-
-**What it blocks:**
-
-| Blocked | Why |
+| | |
 |---|---|
-| Migrations `0002`–`0004` | Never executed. Only `0001` has ever run against real Postgres. |
-| `repository.py` in identity and children | Pure SQL, ~35% covered, cannot be exercised. |
-| `tests/integration/test_stack.py` | 5 tests, correctly marked `integration`. |
-| The `ai_cannot_grant` CHECK constraint | P07 requires proving via raw SQL that an AI verdict cannot promote a child to `mastered`. The application rule is tested; **the database backstop is not.** |
-| P05's LangGraph checkpointer | Needs `AsyncPostgresSaver` against a live database. |
-| Export and erasure completeness | P02 requires walking every foreign key to `children`. |
-| Migrations `0005`–`0006` | Written in P10/P11. Events partitioning, the rollup upserts, the `dedupe_key` unique index and the `nudges_sent <= 3` CHECK have never run. |
-| `progress/repository.py` | 0% covered. Every line is SQL. |
-| The notification dedupe guarantee | docs/10 T11 §10 asks for proof that **Postgres** rejects a duplicate. What exists is an assertion about the DDL text. |
-| Every Docker image | Neither Dockerfile has ever been built, so the Trivy gate in CI has never scanned anything. |
+| Migrations `0002`–`0006` | ✅ **applied cleanly on the first attempt** — including the monthly RANGE partitioning of `events` and the notification dedupe index. 17 relations in both `sanad` and `sanad_test`. This was the largest open risk in the project: DDL transcribed from `docs/02` and never executed. |
+| `tests/integration/test_stack.py` | ✅ **8/8 pass** against the real stack. The five that had never run now do. |
+| `just test` | ✅ **863 passed, 0 failed**, then `COVERAGE GATE PASS: 30 critical file(s) at 100% branch coverage`, 32 tooling tests, 87 web tests. **Green for the first time in the project's history.** |
 
-**What would unblock it:** a working Docker daemon. Then:
+### And it immediately found a real defect
 
-```
-just migrate && just migrate-test && just test
-```
+The first end-to-end request after the daemon came back — `POST /children` —
+returned **500: `relation "caregiver_child" does not exist`**.
 
-I would not trust the DDL in `0002`–`0004` until that has run. They are
-transcribed from `docs/02` and reviewed, but transcription errors in DDL are
-exactly what a first migration run catches.
+`docs/02 §3` specifies `CREATE TABLE caregiver_child`.
+`app.modules.identity.models.CaregiverChild` maps it. `0003_children_consent`
+*mentions it in a comment* — "the DDL there has caregiver_child but nowhere to
+hold a pending invitation" — and never creates it. Every child-scoped route
+depends on it for the ownership check.
+
+Fixed in `0007_caregiver_child`, transcribed verbatim from docs/02 §3, as a new
+forward migration rather than an edit to `0003` (a migration that has been
+applied anywhere is history). After it: `POST /children` returns 201,
+`GET /me` lists the child with `role: owner`, the consent ledger reads back with
+its Arabic wording, and Arabic round-trips to the database byte-exact.
+
+**This is precisely what BLOCKED.md predicted and could not check.** One
+transcription omission, invisible to 863 passing tests, in the DDL nobody had
+ever executed.
+
+### What it unblocked but did NOT do
+
+Having a database does not write the tests that needed one. All of these are now
+*possible* and remain *outstanding*:
+
+| Outstanding | State |
+|---|---|
+| `identity/repository.py` | 37% — pure SQL, still barely exercised |
+| `children/repository.py` | 34% |
+| `progress/repository.py` | **0%** — every line is SQL |
+| The progress routes | Unreachable in a running instance: `set_progress_service_factory` is never called outside tests, so all four `/progress/*` routes return 503 `Progress service is not configured`. Wiring it is one line; doing so without tests would put untested SQL in the request path. |
+| `GET /me` child names | Hard-coded `display_name=""` with a comment saying the children module will fill it. That module now exists. |
+| The `ai_cannot_grant` CHECK constraint | P07 wants raw SQL proving an AI verdict cannot promote a child to `mastered`. The application rule is tested; the database backstop still is not. |
+| P05's LangGraph checkpointer | `AsyncPostgresSaver` now has a Postgres to point at. Nothing is built yet. |
+| Export and erasure completeness | P02 wants a walk of every foreign key to `children`. Not written. |
+| The notification dedupe guarantee | docs/10 T11 §10 wants proof that **Postgres** rejects a duplicate. What exists is an assertion about the DDL text. |
+| Both Docker images | Never built. The Trivy gate has still never scanned anything. `docs/setup/04` §8. |
 
 ---
 
@@ -167,7 +192,7 @@ the code comments are the record and the references get removed.
 | `ANTHROPIC_API_KEY` | Gate 4, and the empirical half of the prompt-cache guard | SETUP §2 |
 | A git remote | Whenever `just bootstrap` is first run from a clean clone | PROGRESS.md |
 | A CI run | The workflow has still never executed on a runner | PROGRESS.md |
-| Nour voice talent | **Now** — longest lead time in the project | REVIEW-QUEUE #10 |
+| Nour voice talent | **Now** — longest lead time in the project | REVIEW-QUEUE #10 · procedure: `docs/setup/01-nour-voice.md` |
 | Speech-language therapist | Stage 5 voice gate | REVIEW-QUEUE #8, #9 |
 | Occupational therapist + 2 families | Stage 5 gate | REVIEW-QUEUE #12 |
-| Groq DPA / VoxCPM2 / Qwen licences | First pilot traffic | REVIEW-QUEUE #13 |
+| Groq DPA / VoxCPM2 / Qwen licences | First pilot traffic | REVIEW-QUEUE #13 · procedure: `docs/setup/02-groq-and-model-licences.md` |

@@ -24,7 +24,7 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project     = "misk"
+      Project     = "sanad"
       Environment = "staging"
       ManagedBy   = "terraform"
     }
@@ -40,12 +40,12 @@ variable "web_image" { type = string }
 
 module "network" {
   source = "../../modules/network"
-  name   = "misk-staging"
+  name   = "sanad-staging"
 }
 
 module "ecs" {
   source             = "../../modules/ecs"
-  name               = "misk-staging"
+  name               = "sanad-staging"
   vpc_id             = module.network.vpc_id
   private_subnet_ids = module.network.private_subnet_ids
   public_subnet_ids  = module.network.public_subnet_ids
@@ -58,7 +58,7 @@ module "ecs" {
 
 module "rds" {
   source                     = "../../modules/rds"
-  name                       = "misk-staging"
+  name                       = "sanad-staging"
   vpc_id                     = module.network.vpc_id
   subnet_ids                 = module.network.data_subnet_ids
   instance_class             = "db.t4g.small"

@@ -1,5 +1,5 @@
 {
-  "name": "@misk/api",
+  "name": "@sanad/api",
   "version": "0.1.0",
   "private": true,
   "description": "Thin workspace wrapper so Turborepo can drive the Python service alongside the web app. All real dependency management is uv + pyproject.toml.",

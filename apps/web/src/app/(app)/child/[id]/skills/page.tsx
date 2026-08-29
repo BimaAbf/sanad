@@ -1,11 +1,16 @@
 import { getTranslations } from "next-intl/server";
 
-import { SkillMapGrid, type MasteryState, type SkillCell } from "@/components/caregiver/SkillMapGrid";
+import {
+  SkillMapGrid,
+  type MasteryState,
+  type SkillCell,
+} from "@/components/caregiver/SkillMapGrid";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { getSkills, type SkillCard } from "@/lib/queries";
 
 /**
  * The 88-skill map. An RSC: every number is aggregated server-side (docs/04a
- * §C09), so this component receives render-ready data and does no arithmetic.
+ * C09), so this component receives render-ready data and does no arithmetic.
  */
 
 const CATEGORY_ORDER = [
@@ -17,16 +22,57 @@ const CATEGORY_ORDER = [
   "letters",
 ] as const;
 
-async function loadSkills(): Promise<Record<string, SkillCell[]>> {
-  // Wired to GET /children/{id}/progress/skills. Empty until the API is
-  // reachable, which renders the instructional empty state rather than a
-  // half-populated grid.
-  return {};
+/**
+ * The database and this component disagree about two state names, and the
+ * mapping has to live somewhere explicit rather than inside a cast.
+ *
+ * `mastery_state` in migration 0001 is
+ * not_started | introduced | practising | mastered | retained | lapsed.
+ * `MasteryState` here is
+ * not_started | emerging | practising | mastered | retained.
+ *
+ * So `introduced` and `lapsed` have no tile to render. They map to the nearest
+ * state the caregiver-facing vocabulary has, which is also the reading docs/06
+ * gives those words. The mismatch itself is a real defect in the pair and
+ * belongs in REVIEW-QUEUE: one of the two vocabularies should move to meet the
+ * other, and picking which one is a content decision, not a code one.
+ */
+const STATE_FROM_API: Record<string, MasteryState> = {
+  not_started: "not_started",
+  introduced: "emerging",
+  emerging: "emerging",
+  practising: "practising",
+  lapsed: "practising",
+  mastered: "mastered",
+  retained: "retained",
+};
+
+function toCell(card: SkillCard): SkillCell {
+  return {
+    skillId: card.skill_id,
+    code: card.code,
+    labelAr: card.label_ar,
+    state: STATE_FROM_API[card.state] ?? "not_started",
+  };
 }
 
-export default async function SkillsPage() {
+export default async function SkillsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const t = await getTranslations("skills");
-  const grouped = await loadSkills();
+  const { id } = await params;
+  const payload = await getSkills(id);
+
+  // The API has already grouped these by category and counted them. Regrouping
+  // here would be a second place where the grouping rule lives.
+  const grouped: Record<string, SkillCell[]> = Object.fromEntries(
+    Object.entries(payload?.by_category ?? {}).map(([category, cards]) => [
+      category,
+      cards.map(toCell),
+    ]),
+  );
 
   const stateLabels: Record<MasteryState, string> = {
     not_started: t("state.not_started"),

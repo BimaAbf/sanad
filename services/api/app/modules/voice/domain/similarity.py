@@ -16,7 +16,7 @@ Pure. No I/O.
 
 from __future__ import annotations
 
-from app.modules.voice.domain.g2p import is_consonant
+from app.modules.voice.domain.g2p import LONG_VOWELS, is_consonant
 
 #: docs/04d §3.
 COST_EMPHATIC = 0.2
@@ -80,19 +80,66 @@ def substitution_cost(expected: str, heard: str) -> float:
 def deletion_cost(expected: str, index: int, length: int, neighbours: tuple[str, str]) -> float:
     """Cost of the child omitting `expected[index]`.
 
-    Three prices, in the order they are checked:
+    Four prices, in the order they are checked:
 
+    * **vowel shortening** — a long vowel between two consonants. See below.
     * **final consonant deletion** — the last phoneme, and a consonant. Word
       identity survives (أحمر → أحم is still unmistakably أحمر).
     * **cluster reduction** — a consonant with a consonant neighbour. Dropping
       one of CC is near-universal and the target is still being attempted.
     * everything else — a plain indel.
+
+    ================================================================================
+    HOW docs/04d §3's `vowel length 0.15` IS ACTUALLY REACHED
+    ================================================================================
+    docs/04d §3 prices a vowel-length error at 0.15 and writes it as the pair
+    `a/aː` — a *substitution*. Through this pipeline that substitution can never
+    happen. Unvowelised Arabic writes no short vowels, ASR returns unvowelised
+    text, and `normalize_ar` strips any tashkeel that survives, so `g2p` emits
+    a short vowel in exactly two places (the definite article, and word-final
+    ة) and never emits /i/ or /u/ at all.
+
+    The only way a length contrast can present itself in this orthography is as
+    the **presence or absence of the mater lectionis** — ا و ي. A child who
+    shortens the vowel of /baːb/ produces something an unvowelised transcript
+    writes as بب, so the scorer sees a DELETED long vowel. Pricing that as an
+    ordinary indel charged 0.8 for the single error class the document calls
+    "almost never meaningful" — 5.3× the intended price. Stacked with one other
+    expected process it pushed a child out of the accept band: راس /rAs/ produced
+    as /rt/ — the vowel shortened and the final /s/ stopped, two textbook
+    processes — scored (0.8 + 0.3)/3 → 0.633, a `retry`, where the documented
+    costs give (0.15 + 0.3)/3 → 0.850, an `accept`.
+
+    **Between two consonants, and deletion only.** Both restrictions are load-
+    bearing and both were established by running the 62-pair corpus:
+
+    * *Between two consonants* is what vowel shortening looks like: CVC → CC,
+      the syllable keeps its shape and loses its length. A long vowel deleted at
+      a word edge changes the shape of the word and stays at 0.8.
+    * *Deletion only.* An INSERTED long vowel — one in the recogniser's output
+      that the target does not contain — is not a shortening; it is extra
+      material. Pricing it cheaply lets the aligner slide two unrelated strings
+      past each other almost for free, and it measurably does: with cheap
+      insertions صابونة against ترابيزة rises from 0.457 to 0.557 and a
+      genuine non-match crosses the accept threshold. Insertions stay at 0.8.
+
+    The asymmetry is legitimate because the scorer knows which side is the
+    target. Deleting a written long vowel says something about how the child
+    produced a known word; inserting one says nothing about that word at all.
+
+    **This rule has not been reviewed by a speech-language therapist**, for the
+    same reason `is_a_different_taught_word` has not. → REVIEW-QUEUE.md #8
+    ================================================================================
     """
+    before, after = neighbours
+    if expected in LONG_VOWELS:
+        if before and after and is_consonant(before) and is_consonant(after):
+            return COST_VOWEL_LENGTH
+        return COST_INDEL
     if not is_consonant(expected):
         return COST_INDEL
     if index == length - 1:
         return COST_FINAL_DELETION
-    before, after = neighbours
     if (before and is_consonant(before)) or (after and is_consonant(after)):
         return COST_CLUSTER_REDUCTION
     return COST_INDEL
@@ -129,6 +176,10 @@ def edit_cost(expected: str, heard: str) -> float:
             delete = row[index - 1] + deletion_cost(
                 expected[index - 1], index - 1, rows, neighbours
             )
+            # Flat, including for a long vowel. `deletion_cost` explains why the
+            # vowel-length discount is deletion-only: a cheap vowel INSERTION
+            # buys the aligner a free realignment and lets a genuine non-match
+            # cross the accept threshold.
             insert = grid[column - 1][index] + COST_INDEL
             row.append(min(substitute, delete, insert))
         grid.append(row)

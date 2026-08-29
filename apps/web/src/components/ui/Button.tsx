@@ -2,9 +2,9 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { CAREGIVER_TOUCH_TARGET_PX } from "@/lib/interaction";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+export type Variant = "primary" | "secondary" | "ghost" | "danger";
 
-const VARIANTS: Record<Variant, string> = {
+export const VARIANTS: Record<Variant, string> = {
   primary: "bg-primary text-surface hover:opacity-90",
   secondary: "bg-primary-soft text-primary hover:opacity-90",
   ghost: "bg-transparent text-primary underline underline-offset-4",
@@ -13,6 +13,9 @@ const VARIANTS: Record<Variant, string> = {
   // thing here that can fail is an adult deleting their own data on purpose.
   danger: "bg-transparent text-attention border border-attention",
 };
+
+export const BUTTON_BASE =
+  "inline-flex items-center justify-center rounded-md px-5 py-3 text-base font-semibold transition-opacity disabled:opacity-50";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -34,7 +37,7 @@ export function Button({ variant = "primary", className = "", ...props }: Button
   return (
     <button
       {...props}
-      className={`inline-flex items-center justify-center rounded-md px-5 py-3 text-base font-semibold transition-opacity disabled:opacity-50 ${VARIANTS[variant]} ${className}`}
+      className={`${BUTTON_BASE} ${VARIANTS[variant]} ${className}`}
       style={{
         minBlockSize: `${CAREGIVER_TOUCH_TARGET_PX}px`,
         minInlineSize: `${CAREGIVER_TOUCH_TARGET_PX}px`,

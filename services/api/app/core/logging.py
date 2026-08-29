@@ -18,7 +18,7 @@ from typing import Any
 import structlog
 from structlog.types import EventDict, WrappedLogger
 
-_request_id: ContextVar[str | None] = ContextVar("misk_request_id", default=None)
+_request_id: ContextVar[str | None] = ContextVar("sanad_request_id", default=None)
 
 #: The only keys permitted in a log record. Identifiers are opaque (uuid) and
 #: safe; anything free-text, personal, or secret-shaped is absent by design.
@@ -59,6 +59,17 @@ ALLOWED_FIELDS: frozenset[str] = frozenset(
         "domain_code",
         "provider",
         "model",
+        # retrieval + recommendation. All counts, enums or booleans -- nothing
+        # here is free text, and nothing here is a document's contents.
+        "surface",
+        "source",
+        "kind",
+        "phrase_id",
+        "embedder",
+        "pruned",
+        "categories",
+        "live",
+        "keyed",
         "attempt",
         "count",
         "code",
@@ -136,7 +147,7 @@ def inject_request_id(_logger: WrappedLogger, _method: str, event_dict: EventDic
     return event_dict
 
 
-def configure_logging(*, level: str = "INFO", service: str = "misk-api") -> None:
+def configure_logging(*, level: str = "INFO", service: str = "sanad-api") -> None:
     """Install the structlog + stdlib pipeline. Idempotent."""
     logging.basicConfig(
         format="%(message)s",

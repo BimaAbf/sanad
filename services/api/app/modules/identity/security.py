@@ -51,7 +51,7 @@ def _dev_keypair() -> tuple[str, str]:
 
     Generated in-process and never written to disk, so there is no key file that
     can be accidentally committed or reused in a deployment. Production supplies
-    MISK_JWT_PRIVATE_KEY / MISK_JWT_PUBLIC_KEY; `Settings` refuses to start in
+    SANAD_JWT_PRIVATE_KEY / SANAD_JWT_PUBLIC_KEY; `Settings` refuses to start in
     production without them.
     """
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -75,7 +75,7 @@ def _keys(settings: Settings) -> tuple[str, str]:
     if settings.jwt_private_key and settings.jwt_public_key:
         return settings.jwt_private_key, settings.jwt_public_key
     if settings.is_production:  # pragma: no cover -- guarded again in Settings
-        raise RuntimeError("MISK_JWT_PRIVATE_KEY and MISK_JWT_PUBLIC_KEY are required")
+        raise RuntimeError("SANAD_JWT_PRIVATE_KEY and SANAD_JWT_PUBLIC_KEY are required")
     return _dev_keypair()
 
 

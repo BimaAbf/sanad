@@ -142,7 +142,7 @@ def score_attempt(expected: Skill, asr: AsrResult) -> Verdict:
 | Fricative → stop (س→ت, ش→ت, ث→ت) | 0.3 | Stopping is the most common phonological process in this population |
 | Cluster reduction (deleting one of CC) | 0.3 | Extremely common; the word is still targeted |
 | Final consonant deletion | 0.3 | Common; word identity is usually preserved |
-| Vowel length error (a/aː) | 0.15 | Almost never meaningful |
+| Vowel length error (a/aː) | 0.15 | Almost never meaningful. **Reached as a deletion, not a substitution** — unvowelised Arabic writes no short vowels, so a shortened vowel arrives as an absent mater lectionis. `deletion_cost` prices a long vowel deleted between two consonants (CVC → CC) at this rate; an *inserted* long vowel stays at 0.8, because a cheap vowel insertion lets the aligner slide unrelated words together. Unreviewed addition — REVIEW-QUEUE #8 |
 | Any other substitution | 1.0 | |
 | Insertion / deletion elsewhere | 0.8 | |
 

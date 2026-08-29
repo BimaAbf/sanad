@@ -34,7 +34,7 @@ graph LR
 > Paste this at the top of every component prompt.
 
 ```
-PROJECT: مِسك (Misk) — an Arabic-first (Egyptian dialect) e-learning and
+PROJECT: سند (Sanad) — an Arabic-first (Egyptian dialect) e-learning and
 developmental-tracking platform for children with Down syndrome and their caregivers.
 
 Full design documents are in ./docs. Read these before writing code:

@@ -37,7 +37,7 @@ this project runs Python from at least three of them (`uv run` at
 ### D3 — No default for any credential
 
 Every datastore field is `Field(...)`. A missing variable raises
-`ConfigurationError` naming every offending variable with its `MISK_` prefix. A
+`ConfigurationError` naming every offending variable with its `SANAD_` prefix. A
 default that "works locally" is how a staging deployment ends up silently
 pointing at the wrong bucket.
 
@@ -92,9 +92,9 @@ a violation fixture (must fail) and a control fixture (must pass). A guard that
 silently matches nothing is otherwise indistinguishable from a passing one, and
 that is the failure mode these checks exist to prevent.
 
-### D9 — A separate `misk_test` database
+### D9 — A separate `sanad_test` database
 
-`tests/conftest.py` points at `misk_test`, created by
+`tests/conftest.py` points at `sanad_test`, created by
 `infra/docker/postgres-init/`. `just test` can never truncate the data a
 developer is looking at in `just dev`.
 

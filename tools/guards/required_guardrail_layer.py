@@ -37,6 +37,8 @@ REQUIRED_LAYERS: dict[str, frozenset[str]] = {
     "tutor_judge": frozenset({"ClosedEnumLayer"}),
     "tutor_summary": frozenset({"ClinicalSafetyLayer"}),
     "safety_classify": frozenset({"ClinicalSafetyLayer"}),
+    "caregiver_chat": frozenset({"ClinicalSafetyLayer"}),
+    "child_chat": frozenset({"CandidateSetLayer"}),
 }
 
 

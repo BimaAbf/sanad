@@ -1,5 +1,5 @@
 {
-  "extends": "@misk/config/tsconfig/next",
+  "extends": "@sanad/config/tsconfig/next",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }

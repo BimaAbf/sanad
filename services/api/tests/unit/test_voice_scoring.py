@@ -195,16 +195,53 @@ def test_substitution_costs_match_docs_04d() -> None:
     assert substitution_cost("b", "b") == 0.0
 
 
-def test_vowel_length_cost_is_reachable_only_with_vowelised_phonemes() -> None:
-    """The 0.15 class, exercised directly.
+def test_vowel_length_cost_is_reachable_from_a_vowelised_phoneme_string() -> None:
+    """The 0.15 class as docs/04d §3 writes it — a substitution.
 
-    It cannot be reached from Arabic text (see the note in voice_corpus.py), so
-    it is asserted against explicit phoneme strings — which is the form a
-    reviewed `phonemes` column would supply.
+    This is the form a reviewed, vowelised `phonemes` column would supply. It is
+    not the form that reaches the scorer from Arabic text today; that path is
+    the deletion tested below.
     """
     assert substitution_cost("a", "A") == COST_VOWEL_LENGTH
     assert edit_cost("bAb", "bab") == pytest.approx(COST_VOWEL_LENGTH)
     assert phoneme_similarity("bAb", "bab") == pytest.approx(1 - COST_VOWEL_LENGTH / 3)
+
+
+def test_vowel_length_cost_is_reachable_from_unvowelised_arabic() -> None:
+    """The path that actually exists, and the defect it fixes.
+
+    Unvowelised Arabic writes no short vowels, so a child who shortens the vowel
+    of /baːb/ is transcribed بب and the scorer sees a DELETED long vowel, not a
+    substitution. That deletion used to be priced as an ordinary indel — 0.8 for
+    the class docs/04d §3 calls "almost never meaningful".
+    """
+    assert deletion_cost("A", 1, 3, ("b", "b")) == COST_VOWEL_LENGTH
+    assert phoneme_similarity(g2p("باب"), g2p("بب")) == pytest.approx(1 - COST_VOWEL_LENGTH / 3)
+
+    # The consequence that made it worth fixing: two expected developmental
+    # processes at once used to fall out of the accept band. راس /rAs/ produced
+    # as /rt/ — shortened vowel plus stopping of the final /s/ — cost
+    # (0.8 + 0.3)/3 -> 0.633, a `retry`. At the documented price it is
+    # (0.15 + 0.3)/3 -> 0.850, an `accept`.
+    stopping_plus_shortening = phoneme_similarity("rAs", "rt")
+    assert stopping_plus_shortening == pytest.approx(0.85)
+    assert stopping_plus_shortening >= ACCEPT_THRESHOLD
+
+
+def test_the_vowel_length_discount_is_deletion_only_and_consonant_flanked() -> None:
+    """Both restrictions, and the non-match that establishes the second.
+
+    A cheap long-vowel INSERTION would let the aligner slide two unrelated
+    strings together: صابونة against ترابيزة rises from 0.464 to 0.557 and
+    crosses the accept threshold. Insertions therefore stay at 0.8.
+    """
+    # word-edge long vowels are not shortening, they change the word's shape
+    assert deletion_cost("A", 0, 3, ("", "b")) == COST_INDEL
+    assert deletion_cost("A", 2, 3, ("b", "")) == COST_INDEL
+    # an inserted long vowel costs a full indel: bb -> bAb is 0.8, not 0.15
+    assert edit_cost("bb", "bAb") == pytest.approx(COST_INDEL)
+    # and the non-match it protects stays out of the accept band
+    assert phoneme_similarity(g2p("صابونة"), g2p("ترابيزة")) < ACCEPT_THRESHOLD
 
 
 def test_deletion_is_cheap_in_a_cluster_and_at_the_end() -> None:
@@ -212,8 +249,8 @@ def test_deletion_is_cheap_in_a_cluster_and_at_the_end() -> None:
     assert deletion_cost("r", 1, 4, ("f", "$")) == COST_CLUSTER_REDUCTION
     # final r of AHmr
     assert deletion_cost("r", 3, 4, ("m", "")) == COST_FINAL_DELETION
-    # a vowel between consonants is an ordinary indel
-    assert deletion_cost("A", 1, 3, ("b", "b")) == COST_INDEL
+    # a short vowel is never a length error: it is an ordinary indel
+    assert deletion_cost("a", 1, 3, ("b", "b")) == COST_INDEL
 
 
 def test_similarity_is_bounded_and_symmetric_for_identical_input() -> None:

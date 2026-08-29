@@ -55,12 +55,12 @@ jobs:
           set -euo pipefail
           registry="${{ steps.ecr.outputs.registry }}"
           tag="${GITHUB_SHA::12}"
-          docker build -t "$registry/misk-api:$tag" services/api
-          docker build -f apps/web/Dockerfile -t "$registry/misk-web:$tag" .
-          docker push "$registry/misk-api:$tag"
-          docker push "$registry/misk-web:$tag"
-          echo "api_image=$registry/misk-api:$tag" >> "$GITHUB_OUTPUT"
-          echo "web_image=$registry/misk-web:$tag" >> "$GITHUB_OUTPUT"
+          docker build -t "$registry/sanad-api:$tag" services/api
+          docker build -f apps/web/Dockerfile -t "$registry/sanad-web:$tag" .
+          docker push "$registry/sanad-api:$tag"
+          docker push "$registry/sanad-web:$tag"
+          echo "api_image=$registry/sanad-api:$tag" >> "$GITHUB_OUTPUT"
+          echo "web_image=$registry/sanad-web:$tag" >> "$GITHUB_OUTPUT"
 
   # Migrations run BEFORE the new tasks start, as a one-off task, and they are
   # forward-only and additive (docs/08 §4). That ordering only works because
@@ -84,13 +84,13 @@ jobs:
         run: |
           set -euo pipefail
           task_arn=$(aws ecs run-task \
-            --cluster "misk-${ENVIRONMENT}" \
-            --task-definition "misk-${ENVIRONMENT}-migrate" \
+            --cluster "sanad-${ENVIRONMENT}" \
+            --task-definition "sanad-${ENVIRONMENT}-migrate" \
             --launch-type FARGATE \
             --overrides '{"containerOverrides":[{"name":"migrate","command":["alembic","upgrade","head"]}]}' \
             --query 'tasks[0].taskArn' --output text)
-          aws ecs wait tasks-stopped --cluster "misk-${ENVIRONMENT}" --tasks "$task_arn"
-          exit_code=$(aws ecs describe-tasks --cluster "misk-${ENVIRONMENT}" --tasks "$task_arn" \
+          aws ecs wait tasks-stopped --cluster "sanad-${ENVIRONMENT}" --tasks "$task_arn"
+          exit_code=$(aws ecs describe-tasks --cluster "sanad-${ENVIRONMENT}" --tasks "$task_arn" \
             --query 'tasks[0].containers[0].exitCode' --output text)
           # A failed migration pages (docs/08 §5) and stops the deploy here,
           # before any new task starts against a half-migrated schema.
@@ -111,8 +111,8 @@ jobs:
         run: |
           set -euo pipefail
           aws deploy create-deployment \
-            --application-name "misk-${ENVIRONMENT}-api" \
-            --deployment-group-name "misk-${ENVIRONMENT}-api" \
+            --application-name "sanad-${ENVIRONMENT}-api" \
+            --deployment-group-name "sanad-${ENVIRONMENT}-api" \
             --revision "revisionType=AppSpecContent,appSpecContent={content='$(cat infra/appspec.json)'}" \
             --description "${GITHUB_SHA::12}"
 
@@ -122,7 +122,7 @@ jobs:
       - name: wait for the bake to finish
         run: |
           deployment_id=$(aws deploy list-deployments \
-            --application-name "misk-${ENVIRONMENT}-api" \
-            --deployment-group-name "misk-${ENVIRONMENT}-api" \
+            --application-name "sanad-${ENVIRONMENT}-api" \
+            --deployment-group-name "sanad-${ENVIRONMENT}-api" \
             --query 'deployments[0]' --output text)
           aws deploy wait deployment-successful --deployment-id "$deployment_id"

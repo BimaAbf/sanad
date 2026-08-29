@@ -29,7 +29,7 @@ async function signIn(page: Page, role: ConsoleRole, mfa = true) {
   await page.goto("/console");
   await page.evaluate(
     ([roleName, mfaOk]) => {
-      window.localStorage.setItem("misk.console.test-session", JSON.stringify({ role: roleName, mfa: mfaOk }));
+      window.localStorage.setItem("sanad.console.test-session", JSON.stringify({ role: roleName, mfa: mfaOk }));
     },
     [role, mfa] as const,
   );

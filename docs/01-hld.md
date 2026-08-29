@@ -32,7 +32,7 @@ graph TB
     CL["🩺 Clinician<br/>(reviews flags, owns item bank)"]
     AD["⚙️ Admin<br/>(content, ops)"]
 
-    SYS["<b>مِسك · Misk Platform</b><br/>Arabic-first AI learning<br/>+ developmental tracking"]
+    SYS["<b>سند · SANAD Platform</b><br/>Arabic-first AI learning<br/>+ developmental tracking"]
 
     ANT["Anthropic Claude API<br/>claude-opus-5"]
     AZ["Azure AI Speech<br/>ar-EG TTS + ASR"]

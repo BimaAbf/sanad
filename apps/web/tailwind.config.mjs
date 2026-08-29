@@ -1,4 +1,4 @@
-import preset from "@misk/config/tailwind";
+import preset from "@sanad/config/tailwind";
 
 /** @type {import('tailwindcss').Config} */
 export default {

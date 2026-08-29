@@ -151,7 +151,7 @@ class TempAudio:
         self.data = data
         self.path: str | None = None
         if needs_temp_file(data):
-            handle, path = tempfile.mkstemp(prefix="misk-voice-", suffix=".audio")
+            handle, path = tempfile.mkstemp(prefix="sanad-voice-", suffix=".audio")
             with os.fdopen(handle, "wb") as file:
                 file.write(data)
             self.path = path

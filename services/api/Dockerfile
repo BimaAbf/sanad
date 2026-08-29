@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# Production image for the Misk API. docs/08 §3.
+# Production image for the Sanad API. docs/08 §3.
 #
 # Four properties this file exists to guarantee, each of which a naive Dockerfile
 # loses:

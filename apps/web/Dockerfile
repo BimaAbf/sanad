@@ -29,7 +29,13 @@ COPY . .
 # `standalone` output: the runtime layer then carries the traced node_modules
 # subset rather than the whole workspace, which is the difference between a
 # ~180 MB image and a ~900 MB one.
-RUN pnpm --filter @misk/web build
+#
+# next.config.mjs reads this rather than hard-coding `output: "standalone"`,
+# because `next start` refuses to serve a standalone build and that would break
+# every local production run. Removing this line does not fail the build -- it
+# fails the COPY below, which is a much less obvious symptom.
+ENV NEXT_OUTPUT=standalone
+RUN pnpm --filter @sanad/web build
 
 # --- runtime ---------------------------------------------------------------
 FROM node:22-slim AS runtime

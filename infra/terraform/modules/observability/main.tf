@@ -90,7 +90,7 @@ resource "aws_cloudwatch_metric_alarm" "paging" {
 
   alarm_name          = "${var.name}-${each.key}"
   alarm_description   = each.value.description
-  namespace           = "Misk"
+  namespace           = "Sanad"
   metric_name         = each.value.metric
   comparison_operator = each.value.comparison
   threshold           = each.value.threshold
