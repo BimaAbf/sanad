@@ -82,6 +82,16 @@
   --c-resting: #7a8b86;
   --c-attention: #8b4a6b;
 
+  /* Text-safe variants of the two semantic colours that do not clear 4.5:1 as
+     TEXT on white. Measured: --c-practising is 3.26:1 and --c-resting is
+     3.58:1. Both clear the 3:1 that WCAG 2.2 SC 1.4.11 asks of a non-text
+     indicator, so the swatch on the skill map is fine as it stands; a state
+     rendered as a WORD needs these instead. globals.css previously claimed
+     "every foreground/background pair meets >= 7:1", which was not true of
+     those two — see apps/web/src/lib/contrast.test.ts. */
+  --c-practising-text: #7d4c0e;
+  --c-resting-text: #4a5a55;
+
   /* Child palette. */
   --k-red: #d93a2b;
   --k-blue: #1c6bbf;
@@ -162,4 +172,23 @@ body {
 :focus-visible {
   outline: 3px solid var(--c-primary);
   outline-offset: 2px;
+}
+
+/*
+ * The only keyframe animation in the product.
+ *
+ * 1.5 Hz (666ms per cycle) is half the 3 Hz ceiling docs/06 §4 sets for seizure
+ * risk, and the opacity range is narrow on purpose: this is a hint that draws
+ * the eye, not a flash that demands it. The @media block above disables it
+ * entirely under prefers-reduced-motion.
+ */
+@keyframes misk-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.72;
+  }
 }
