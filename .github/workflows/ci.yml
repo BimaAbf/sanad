@@ -38,6 +38,8 @@ jobs:
         with: { node-version: 22, cache: pnpm }
 
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - run: uv sync --all-extras
         working-directory: services/api
 
@@ -91,7 +93,9 @@ jobs:
           for i in $(seq 1 30); do
             curl -fsS http://localhost:9000/minio/health/live && break || sleep 2
           done
-          docker run --rm --network host minio/mc:latest sh -c             "mc alias set local http://localhost:9000 sanadminio sanadminio-dev-secret &&              mc mb --ignore-existing local/sanad-media &&              mc mb --ignore-existing local/sanad-private"
+          docker run --rm --network host minio/mc:latest alias set local http://localhost:9000 sanadminio sanadminio-dev-secret
+          docker run --rm --network host minio/mc:latest mb --ignore-existing local/sanad-media
+          docker run --rm --network host minio/mc:latest mb --ignore-existing local/sanad-private
 
       - run: uv sync --all-extras
         working-directory: services/api
@@ -134,6 +138,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - run: pnpm exec turbo run typecheck
       - run: pnpm exec turbo run test
       # NOT YET IMPLEMENTED: Storybook with an LTR and an RTL story per
@@ -163,6 +169,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - name: install playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/web
@@ -191,6 +199,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - run: pnpm --filter @sanad/web build
       # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
       # the budgets and `assertions` are set to `error`, so a regression fails
@@ -209,6 +219,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - run: uv sync --all-extras
         working-directory: services/api
       - name: pip-audit
@@ -225,14 +237,14 @@ jobs:
       # transitive dependency nobody can act on today; a HIGH in a built image
       # is something we are about to run as a service.
       - name: trivy (api)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: sanad-api:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
       - name: trivy (web)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: sanad-web:ci
           severity: HIGH,CRITICAL
@@ -266,6 +278,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
       - run: uv sync --all-extras
         working-directory: services/api
 

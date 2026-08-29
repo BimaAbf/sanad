@@ -78,9 +78,7 @@ def _retriever() -> InMemoryChildMemoryRetriever:
 
 
 def _caregiver_graph(gateway: LlmGateway | None = None):
-    runnable = (
-        GatewayRunnable(gateway, caregiver_call()) if gateway is not None else None
-    )
+    runnable = GatewayRunnable(gateway, caregiver_call()) if gateway is not None else None
     return build_caregiver_graph(retriever=_retriever(), runnable=runnable)
 
 
@@ -168,16 +166,12 @@ def test_caregiver_chain_blocks_a_diagnosis() -> None:
 
 
 def test_caregiver_chain_passes_ordinary_advice() -> None:
-    result = caregiver_chain([]).run(
-        CaregiverAnswer(answer_ar="جربوا الأحمر تاني النهارده.")
-    )
+    result = caregiver_chain([]).run(CaregiverAnswer(answer_ar="جربوا الأحمر تاني النهارده."))
     assert result.ok
 
 
 def test_caregiver_chain_blocks_a_leaked_identifier() -> None:
-    result = caregiver_chain(["يوسف"]).run(
-        CaregiverAnswer(answer_ar="يوسف بيتحسن في الألوان.")
-    )
+    result = caregiver_chain(["يوسف"]).run(CaregiverAnswer(answer_ar="يوسف بيتحسن في الألوان."))
     assert not result.ok
 
 

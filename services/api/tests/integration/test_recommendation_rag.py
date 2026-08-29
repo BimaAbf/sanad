@@ -353,9 +353,7 @@ async def test_the_ai_cannot_grant_constraint_is_enforced_by_the_database(sessio
     skill_id = await _seed_skill(
         session, code="color_red_cn", category="colors", label_ar="أحمر", intro_order=1
     )
-    caregiver = (
-        await session.execute(text("SELECT id::text AS id FROM caregivers LIMIT 1"))
-    ).one()
+    caregiver = (await session.execute(text("SELECT id::text AS id FROM caregivers LIMIT 1"))).one()
     play_session = (
         await session.execute(
             text("""

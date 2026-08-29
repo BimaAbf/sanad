@@ -82,6 +82,7 @@ class Provider(StrEnum):
     ANTHROPIC = "anthropic"
     GROQ = "groq"
 
+
 FIXTURE_ROOT = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "ai"
 
 
@@ -308,9 +309,7 @@ def groq_request(
     Pydantic validation -- reported as SCHEMA_ERROR, which reads as a model
     problem rather than a request-construction one.
     """
-    joined = "\n\n".join(
-        str(block.get("text", "")) for block in system if block.get("text")
-    )
+    joined = "\n\n".join(str(block.get("text", "")) for block in system if block.get("text"))
     chat: list[dict[str, Any]] = []
     if joined:
         chat.append({"role": "system", "content": joined})

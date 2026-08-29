@@ -98,9 +98,7 @@ _PHONE = r"\+?\d[\d\s\-()]{7,}\d"
 #: BEFORE the phone branch for the same reason the date branch does.
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
-_DATE_OR_PHONE = re.compile(
-    f"(?P<date>{_ISO_DATE})|(?P<uuid>{_UUID})|(?P<phone>{_PHONE})"
-)
+_DATE_OR_PHONE = re.compile(f"(?P<date>{_ISO_DATE})|(?P<uuid>{_UUID})|(?P<phone>{_PHONE})")
 
 
 def _strip_phones(text: str) -> str:
@@ -112,6 +110,7 @@ def _strip_phones(text: str) -> str:
         lambda match: "[PHONE]" if match.group("phone") else match.group(0),
         text,
     )
+
 
 #: Keys dropped from any payload outright, at any depth.
 FORBIDDEN_KEYS: frozenset[str] = frozenset(

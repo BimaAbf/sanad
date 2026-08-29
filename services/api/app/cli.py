@@ -57,8 +57,7 @@ async def _seed_curriculum() -> int:
         from seeds.curriculum import REVIEWED_BY, build_skills
     except ModuleNotFoundError:
         print(
-            "seed: cannot import seeds.curriculum.\n"
-            "  Run it from services/api (`just seed` does).",
+            "seed: cannot import seeds.curriculum.\n  Run it from services/api (`just seed` does).",
             file=sys.stderr,
         )
         return 1

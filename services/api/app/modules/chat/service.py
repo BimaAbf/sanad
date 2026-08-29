@@ -100,9 +100,7 @@ class ChatService:
         call = caregiver_call() if which == "caregiver" else child_call()
         return GatewayRunnable(self._gateway, call)
 
-    async def ask_caregiver(
-        self, *, child_id: str, caregiver_id: str, message: str
-    ) -> ChatTurn:
+    async def ask_caregiver(self, *, child_id: str, caregiver_id: str, message: str) -> ChatTurn:
         text = clip(message)
         await self._consent.require(child_id, ConsentKey.AI_PROCESSING)
 
@@ -148,9 +146,7 @@ class ChatService:
         )
         return turn
 
-    async def ask_child(
-        self, *, child_id: str, caregiver_id: str | None, heard: str
-    ) -> ChatTurn:
+    async def ask_child(self, *, child_id: str, caregiver_id: str | None, heard: str) -> ChatTurn:
         """The child surface. Selects a reviewed phrase; generates nothing.
 
         No retrieval. Nour does not reason about a child's history mid-session

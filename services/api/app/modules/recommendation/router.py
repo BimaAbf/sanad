@@ -55,9 +55,7 @@ async def get_recommendation_service(
     yield _service_factory(session)
 
 
-RecommendationServiceDep = Annotated[
-    RecommendationService, Depends(get_recommendation_service)
-]
+RecommendationServiceDep = Annotated[RecommendationService, Depends(get_recommendation_service)]
 
 
 @router.get("/children/{child_id}/recommendation", response_model=NextExerciseResponse)

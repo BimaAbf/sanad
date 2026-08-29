@@ -144,9 +144,7 @@ def build_graph(
             # The judge is allowed to cite nothing. When it does, the audit
             # trail still records what it was shown -- otherwise a bad
             # recommendation is unreviewable after the fact.
-            recommendation = _with_citations(
-                recommendation, cited_ids(state.get("documents", []))
-            )
+            recommendation = _with_citations(recommendation, cited_ids(state.get("documents", [])))
         source = recommendation.source if recommendation else "none"
         logger.info(
             "recommendation_decided",

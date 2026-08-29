@@ -220,9 +220,7 @@ class RecommendationRepository:
         return [_skill_fact(row) for row in await self.skill_rows(child_id)]
 
     async def sessions(self, child_id: str, *, limit: int = SESSION_LIMIT) -> list[SessionFactRow]:
-        rows = await self._session.execute(
-            SELECT_SESSIONS, {"child_id": child_id, "limit": limit}
-        )
+        rows = await self._session.execute(SELECT_SESSIONS, {"child_id": child_id, "limit": limit})
         return [
             SessionFactRow(
                 session_id=str(row.session_id),
@@ -298,9 +296,7 @@ class RecommendationRepository:
         for row in rows:
             labels[row.skill_id] = (row.code, row.label_ar)
             prerequisites = tuple(
-                by_code[code]
-                for code in _as_list(row.prerequisites)
-                if code in by_code
+                by_code[code] for code in _as_list(row.prerequisites) if code in by_code
             )
             snapshots.append(
                 SkillSnapshot(

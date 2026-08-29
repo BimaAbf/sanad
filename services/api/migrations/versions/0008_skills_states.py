@@ -59,8 +59,9 @@ def upgrade() -> None:
     """)
     # The catalogue is read in `intro_order` within `category` on every skills
     # page render, and filtered on `is_active` every time.
-    op.execute("CREATE INDEX skills_active_order_idx ON skills (category, intro_order) "
-               "WHERE is_active")
+    op.execute(
+        "CREATE INDEX skills_active_order_idx ON skills (category, intro_order) WHERE is_active"
+    )
 
     op.execute("""
         CREATE TABLE skill_states (
@@ -78,8 +79,9 @@ def upgrade() -> None:
     """)
     # The erasure walk deletes by child; the primary key leads on child_id, so
     # that is already covered. This one serves the due-review sweep.
-    op.execute("CREATE INDEX skill_states_due_idx ON skill_states (due_at) "
-               "WHERE due_at IS NOT NULL")
+    op.execute(
+        "CREATE INDEX skill_states_due_idx ON skill_states (due_at) WHERE due_at IS NOT NULL"
+    )
 
 
 def downgrade() -> None:
