@@ -8,6 +8,16 @@ collection, before any fixture has run.
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+# `tools/` holds the CI guards and the banned-terms list. Tests assert against
+# them directly rather than re-declaring the lists, so a term added to the lint
+# is immediately a term the notification send path rejects. That needs the repo
+# root importable, and the api package is two levels below it.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 REQUIRED_ENV: dict[str, str] = {
     "MISK_ENVIRONMENT": "ci",

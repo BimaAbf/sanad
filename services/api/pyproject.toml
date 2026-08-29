@@ -25,6 +25,9 @@ dependencies = [
     "argon2-cffi>=23.1.0",
     "pyjwt[crypto]>=2.10.1",
     "phonenumbers>=8.13.52",
+    # POST /voice/attempt is multipart: FastAPI refuses to build a Form route
+    # without this, and the failure is at import time, not at request time.
+    "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",
     # Windows ships no system tz database; Africa/Cairo must resolve everywhere
     # the code runs, not only in the Linux container.
@@ -98,6 +101,19 @@ ignore = [
 # GuardrailRejection / GuardrailBlock read as what they are; a "...Error" suffix
 # would obscure that one is recoverable and the other is not.
 "app/guardrails/layers.py" = ["N818"]
+# AudioRejected / UnvowelisedText / AsrUnavailable / NotificationRejected name
+# the CONDITION, which is what the call sites read as. "AudioRejectedError"
+# would say the rejection is an error; it is the normal, expected outcome of
+# validating an upload from a phone in a noisy room.
+"app/modules/voice/domain/audio.py" = ["N818"]
+"app/modules/voice/domain/ssml.py" = ["N818"]
+"app/modules/voice/providers.py" = ["N818"]
+"app/modules/notifications/domain/policy.py" = ["N818"]
+# These tests inspect the temp directory and the object store on purpose: the
+# assertion IS that a child's audio is gone from both. ASYNC240 and S108 are
+# about production code reaching for blocking IO and /tmp; here the blocking
+# call is the check itself.
+"tests/unit/test_voice_service.py" = ["ASYNC240", "S108"]
 # A CLI writes to stdout; that is its interface, not a stray debug print.
 "app/cli.py" = ["T201"]
 

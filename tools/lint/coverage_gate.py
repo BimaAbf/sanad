@@ -30,10 +30,33 @@ CRITICAL_FRAGMENTS: tuple[str, ...] = (
 
 
 def _is_critical(filename: str) -> bool:
+    """Does this file fall under the 100%-branch rule?
+
+    Two shapes count, and the second one was originally missed:
+
+        app/modules/children/domain.py        a single-module domain
+        app/modules/learning/domain/bkt.py    a domain PACKAGE
+
+    docs/08 §4 writes the rule as the glob ``app/modules/*/domain*``, which
+    matches both. The first version of this function tested
+    ``Path(name).startswith("domain")`` — true for `domain.py`, false for
+    `bkt.py` — so every package-style domain silently fell outside the gate.
+    That is most of them: the assessment engine, BKT, mastery, the manifest and
+    the voice scorer were all unchecked while the gate reported PASS.
+    """
     posix = filename.replace("\\", "/")
-    if "app/guardrails/" in posix:
+    # coverage.xml records paths RELATIVE TO <source>, which is `services/api/app`
+    # — so a filename reads `modules/learning/domain/bkt.py`, with no `app/`
+    # prefix. Matching on "app/modules/" therefore matched nothing at all and the
+    # gate reported SKIP on every run, including the ones that recorded 100%
+    # branch coverage in PROGRESS.md. The prefix is stripped rather than
+    # required, so the check works against either form.
+    posix = posix.removeprefix("app/")
+    if posix.startswith("guardrails/"):
         return True
-    return "app/modules/" in posix and Path(posix).name.startswith("domain")
+    if not posix.startswith("modules/"):
+        return False
+    return "/domain/" in posix or Path(posix).name.startswith("domain")
 
 
 def main() -> int:

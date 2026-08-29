@@ -87,8 +87,12 @@ def bkt_update(
     correct: bool,
     choice_count: int,
     prompt_level: PromptLevel,
+    discount_override: float | None = None,
 ) -> BktState:
     """One Bayesian update plus the learning transition.
+
+    `discount_override` replaces the ladder discount when a response does not
+    come from the ladder at all — see the comment at the assignment.
 
     The prompt discount blends toward the posterior rather than replacing it, so
     a prompted response moves the estimate part of the way. At `full_model` the
@@ -97,7 +101,16 @@ def bkt_update(
     being shown the answer is itself a learning opportunity.
     """
     p_guess = guess_probability(choice_count)
-    discount = PROMPT_DISCOUNT[prompt_level]
+    # `discount_override` exists for one case the four-rung ladder cannot
+    # express: docs/04d §3 weights a caregiver override at 0.5 of an
+    # independent correct, and there is no rung at 0.5. Encoding it as
+    # `gestural` (0.6) would overstate the evidence and `partial_verbal` (0.35)
+    # would understate it, and both would make the number unfindable later.
+    discount = (
+        PROMPT_DISCOUNT[prompt_level]
+        if discount_override is None
+        else clamp(discount_override, 0.0, 1.0)
+    )
 
     prior = state.p_known
     if correct:

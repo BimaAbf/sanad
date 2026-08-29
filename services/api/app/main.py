@@ -76,9 +76,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def _install_routers(app: FastAPI) -> None:
     from app.modules.children.router import router as children_router
     from app.modules.identity.router import router as identity_router
+    from app.modules.progress.router import router as progress_router
+    from app.modules.voice.router import router as voice_router
 
     app.include_router(identity_router)
     app.include_router(children_router)
+    app.include_router(voice_router)
+    app.include_router(progress_router)
 
 
 def _install_health_routes(app: FastAPI, settings: Settings) -> None:
