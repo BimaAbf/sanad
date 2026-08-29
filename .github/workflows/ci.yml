@@ -40,7 +40,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
 
@@ -141,7 +140,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - run: pnpm exec turbo run typecheck
       - run: pnpm exec turbo run test
       # NOT YET IMPLEMENTED: Storybook with an LTR and an RTL story per
@@ -173,7 +171,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - name: install playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/web
@@ -204,7 +201,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - run: pnpm --filter @sanad/web build
       # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
       # the budgets and `assertions` are set to `error`, so a regression fails
@@ -225,7 +221,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
       - name: pip-audit
@@ -242,14 +237,14 @@ jobs:
       # transitive dependency nobody can act on today; a HIGH in a built image
       # is something we are about to run as a service.
       - name: trivy (api)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: sanad-api:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
       - name: trivy (web)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: sanad-web:ci
           severity: HIGH,CRITICAL
@@ -285,7 +280,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
         env:
           COREPACK_ENABLE_PROJECT_SPEC: 0
-          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
 

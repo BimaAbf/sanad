@@ -5,14 +5,11 @@ packages:
   # Turborepo can run it in the same `dev` graph as the web app.
   - "services/*"
 
+# Build scripts are opt-in (pnpm 11: the `allowBuilds` map — the v10
+# `onlyBuiltDependencies` list is legacy). These three ship native binaries
+# the toolchain genuinely needs; nothing else is permitted to run a
+# postinstall.
 allowBuilds:
-  esbuild: set this to true or false
-  sharp: set this to true or false
-  unrs-resolver: set this to true or false
-
-# Build scripts are opt-in. These three ship native binaries the toolchain
-# genuinely needs; nothing else is permitted to run a postinstall.
-onlyBuiltDependencies:
-  - esbuild
-  - sharp
-  - unrs-resolver
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
