@@ -1,0 +1,18 @@
+{
+  "content": {
+    "answer_ar": "حاولوا تقصروا الجلسة لحد 5‑6 دقايق وتاخدوا استراحة لو طفلك حسّ بالتعب، وخلو النشاط بسيط مع اختيارين بس. كمان حافظوا على صوت واضح ومش عالي عشان ما يجهدوش.",
+    "used_document_ids": [
+      "session-2026-08-28",
+      "profile",
+      "session-2026-08-23",
+      "session-2026-08-26"
+    ]
+  },
+  "id": "chatcmpl-283d3659-5659-45f9-91b9-14552f28a986",
+  "stop_reason": "stop",
+  "usage": {
+    "completion_tokens": 426,
+    "prompt_tokens": 1006,
+    "total_tokens": 1432
+  }
+}

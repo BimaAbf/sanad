@@ -129,6 +129,28 @@ MAX_TOKENS_BY_DECISION: dict[str, int] = {
 }
 
 
+#: Groq counts a reasoning model's hidden reasoning against
+#: `max_completion_tokens`, and `openai/gpt-oss-120b` is a reasoning model.
+#: MAX_TOKENS_BY_DECISION sizes the ANSWER -- 512 for a plan, 64 for one phrase
+#: id -- so sending it as the completion cap meant the whole budget went on
+#: reasoning and the model was cut off before it emitted a single byte of JSON.
+#: Groq reports that as HTTP 400 `json_validate_failed` with
+#: `"failed_generation": "max completion tokens reached before generating a
+#: valid document"`, which this file maps to `Outcome.PROVIDER_ERROR` and every
+#: caller absorbs as a deterministic fallback -- so the live AI path failed
+#: silently, visible only as an AI-source rate of zero. Measured: a
+#: `tutor_plan` call spends ~560 reasoning tokens before ~170 of answer.
+#:
+#: The answer stays bounded by its schema (`reason_ar` is max_length=240,
+#: `phrase_id` max_length=40) rather than by the token cap, so the headroom
+#: loosens no output contract.
+REASONING_HEADROOM_BY_EFFORT: dict[str, int] = {
+    "low": 1024,
+    "medium": 2048,
+    "high": 4096,
+}
+
+
 @dataclass(slots=True)
 class LlmResult[T: BaseModel]:
     value: T | None
@@ -215,6 +237,57 @@ def anthropic_request(
     }
 
 
+def strict_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """A Pydantic JSON Schema, rewritten to what `strict: true` will accept.
+
+    Groq validates a `strict` json_schema the way OpenAI does, and it is
+    stricter than JSON Schema itself: EVERY key in `properties` must appear in
+    `required`, and every object must set `additionalProperties: false`. A
+    Pydantic field with a default is simply absent from `required`, so
+    `NextExercisePlan.grounded_in` and `CaregiverAnswer.used_document_ids` --
+    both `default_factory=list` -- made every live request a 400:
+
+        invalid JSON schema for response_format: 'tutor_plan': /required:
+        `required` is required to be supplied and to be an array including
+        every key in properties
+
+    The gateway catches that as `Outcome.PROVIDER_ERROR` and every caller
+    handles it by falling back to the deterministic path. Nothing raised, no
+    test failed, and the AI half of the product was unreachable the moment
+    `AI_LIVE=1` -- visible only as an AI-source rate of zero.
+
+    Requiring an optional field costs nothing here: both are lists, the model
+    can return `[]`, and Pydantic accepts an explicit empty list for a
+    `default_factory` field. `extra="forbid"` on the models already implies
+    `additionalProperties: false`, but it is set unconditionally so that a
+    model declared without it cannot fail the same way.
+
+    The walk covers `$defs`, because a nested model is emitted there and
+    referenced by `$ref`, and a nested object left un-strict fails the same
+    check.
+    """
+    rewritten: dict[str, Any] = {}
+    for key, value in schema.items():
+        if isinstance(value, Mapping):
+            rewritten[key] = strict_schema(value)
+        elif isinstance(value, list):
+            rewritten[key] = [
+                strict_schema(item) if isinstance(item, Mapping) else item for item in value
+            ]
+        else:
+            rewritten[key] = value
+
+    # `type == "object"`, not merely "has a `properties` key": the mapping UNDER
+    # `properties` is walked by this same recursion, and a model with a field
+    # actually named `properties` would otherwise have `required` and
+    # `additionalProperties` injected into its field container.
+    properties = rewritten.get("properties")
+    if rewritten.get("type") == "object" and isinstance(properties, Mapping):
+        rewritten["required"] = list(properties)
+        rewritten["additionalProperties"] = False
+    return rewritten
+
+
 def groq_request(
     *,
     decision_point: str,
@@ -249,14 +322,21 @@ def groq_request(
             "type": "json_schema",
             "json_schema": {
                 "name": decision_point,
-                "schema": schema_model.model_json_schema(),
+                "schema": strict_schema(schema_model.model_json_schema()),
                 "strict": True,
             },
         },
         # Greedy. A closed-set choice that is sampled is a different choice some
         # fraction of the time, and every decision point here is closed-set.
         "temperature": 0,
-        "max_completion_tokens": MAX_TOKENS_BY_DECISION.get(decision_point, 512),
+        # The same cost/quality dial the Anthropic path passes as
+        # `output_config.effort`, spelled the way gpt-oss takes it, plus the
+        # reasoning headroom that dial implies.
+        "reasoning_effort": EFFORT_BY_DECISION.get(decision_point, "low"),
+        "max_completion_tokens": (
+            MAX_TOKENS_BY_DECISION.get(decision_point, 512)
+            + REASONING_HEADROOM_BY_EFFORT[EFFORT_BY_DECISION.get(decision_point, "low")]
+        ),
         "stream": False,
     }
 

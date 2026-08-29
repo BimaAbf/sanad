@@ -125,6 +125,19 @@ seed:
 eval:
     uv --directory {{api}} run python -m app.cli eval
 
+# Run one scheduled job by name -- the entrypoint a platform cron invokes.
+# `tools/dev` does NOT run these on a timer: the cadences in
+# app/workers/schedule.py are Cairo local times, and a resident scheduler
+# started in January is an hour wrong from April.
+#
+#   just worker bkt_decay        forgetting for skills past their review date
+#   just worker rollup_rebuild   the nightly rollup backstop, plus partitions
+#
+# Seven of the nine declared jobs have no body yet. Asking for one names what
+# it is waiting for and exits 1, rather than reporting a run that did nothing.
+worker job:
+    uv --directory {{api}} run python -m app.cli worker {{job}}
+
 # Inspect the LangChain/RAG path against the real database, stage by stage:
 # the built corpus, the pgvector retrieval with scores, the red-flag screen,
 # exactly what went to the provider after redaction, and whether the answer

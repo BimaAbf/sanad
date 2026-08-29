@@ -205,11 +205,19 @@ SELECT_SKILLS_FOR_DEMO = """
     LIMIT 4
 """
 
+#: `modality` is spelled out because migration 0012 widened the primary key to
+#: (child_id, skill_id, modality) -- a child can be receptive on a word and
+#: expressive on the same word, and those are two rows now. An `ON CONFLICT`
+#: naming only the first two columns matches no unique constraint and Postgres
+#: rejects the statement outright, which is how this was found. The demo seeds
+#: `receptive` only: every attempt it writes is `listen_point`, and a state row
+#: in a modality the history never exercises would be a candidate the engine
+#: could offer with nothing behind it.
 INSERT_STATE = """
-    INSERT INTO skill_states (child_id, skill_id, state, p_known, due_at)
-    VALUES (CAST(:child AS uuid), CAST(:skill AS uuid),
+    INSERT INTO skill_states (child_id, skill_id, modality, state, p_known, due_at)
+    VALUES (CAST(:child AS uuid), CAST(:skill AS uuid), CAST(:modality AS modality),
             CAST(:state AS mastery_state), :p_known, :due_at)
-    ON CONFLICT (child_id, skill_id) DO UPDATE
+    ON CONFLICT (child_id, skill_id, modality) DO UPDATE
         SET state = EXCLUDED.state, p_known = EXCLUDED.p_known, due_at = EXCLUDED.due_at
 """
 
@@ -282,8 +290,8 @@ async def _seed_demo(session: AsyncSession) -> str:
     for skill_id, state, p_known, due_at in states:
         await session.execute(
             text(INSERT_STATE),
-            {"child": child_id, "skill": skill_id, "state": state,
-             "p_known": p_known, "due_at": due_at},
+            {"child": child_id, "skill": skill_id, "modality": "receptive",
+             "state": state, "p_known": p_known, "due_at": due_at},
         )
 
     # Three sessions, the most recent cut short by fatigue.

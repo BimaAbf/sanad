@@ -63,11 +63,18 @@ INSERT_SKILL = text("""
     ON CONFLICT (code) DO NOTHING
 """)
 
+#: `modality` is named because 0012 widened the primary key to
+#: (child_id, skill_id, modality). An ON CONFLICT clause naming only the first
+#: two columns matches no unique constraint and Postgres rejects the statement
+#: outright -- which is how the guard's "old code against the new schema"
+#: argument shows up in practice, in miniature.
+#:
+#: `receptive`, because that is the modality every fixture here exercises.
 INSERT_STATE = text("""
-    INSERT INTO skill_states (child_id, skill_id, state, p_known, due_at)
-    VALUES (CAST(:child_id AS uuid), CAST(:skill_id AS uuid),
+    INSERT INTO skill_states (child_id, skill_id, modality, state, p_known, due_at)
+    VALUES (CAST(:child_id AS uuid), CAST(:skill_id AS uuid), 'receptive',
             CAST(:state AS mastery_state), :p_known, :due_at)
-    ON CONFLICT (child_id, skill_id) DO UPDATE SET state = EXCLUDED.state
+    ON CONFLICT (child_id, skill_id, modality) DO UPDATE SET state = EXCLUDED.state
 """)
 
 

@@ -5,7 +5,67 @@ One row per component. **Status** is one of `not started` · `in progress` ·
 sub-session's report — only after the orchestrator re-ran the gate command
 itself and read the real output.
 
-_Last updated: 2026-08-29 · after P09–P15, then a defect-and-tooling pass_
+_Last updated: 2026-08-29 · after the mastery loop was wired (ADR 018)_
+
+> ⚠️ **This file is behind the tree in one respect and it is worth knowing
+> which.** The commit `a86234c` added four backend modules — `assessment`
+> (router/service/repository), `play`, `chat` and `recommendation` — four
+> migrations (`0008`–`0010`), four more mounted routers, and `app/core/wiring.py`
+> (which closed the "503 … is not configured" defect on every `/progress/*` and
+> `/voice/*` route). The component table below still describes the state before
+> that. The rows for P05, P10 and P12–P14 in particular understate what exists.
+
+---
+
+## 2026-08-29 — the mastery loop, and two orphan modules connected
+
+**`skill_states` and `mastery_events` had four readers and no writer.** Attempts
+were stored, the dashboard counted sessions and minutes, and `p_known` never
+moved — so no skill left `not_started` and nothing could reach `mastered`. Every
+piece was built and tested at 100% branch coverage; nothing called any of them.
+The only writer of either table in the repository was `app/ai/inspect.py`, the
+`sanad rag demo` seeder.
+
+Now wired, at session end, in `app/modules/learning/service.py`. It **runs
+`tutor_ai/session.py`** rather than reimplementing the rule — which also makes
+P08's orchestrator reachable code for the first time. `p_known` is recomputed
+from the whole attempt history on every run (idempotent by construction);
+`state` is seeded from the database, because `next_state` advances one rung per
+evaluation by design. Decisions and rejected alternatives:
+[`docs/adr/018-mastery-loop.md`](docs/adr/018-mastery-loop.md).
+
+**Two migrations.** `0011` adds the thirteen `skill_states` columns docs/02 §6
+specifies and 0008 omitted (0008 was built from one query's SELECT list).
+**`0012` widens the primary key to `(child_id, skill_id, modality)` and is the
+project's first deliberately destructive migration** — alone in its revision,
+and it needs the `destructive-migration` label to deploy. `just guards` fails on
+exactly that one line, which is the guard working, not a regression.
+
+**`app/workers/jobs.py` now exists.** `schedule.py` had said "the job bodies live
+in `app.workers.jobs`" since P11; the module did not, and neither did a runner.
+Two of the nine jobs have bodies (`bkt_decay`, `rollup_rebuild`); the other seven
+are absent from the registry and named in `UNBUILT` with what each is waiting
+for, and `run_job` refuses them by name. Entrypoint: `just worker <job>`. Both
+verified against the dev database. **No scheduler invokes them** — that needs
+the platform cron in P15, which has never been deployed.
+
+**BLOCKED.md's `ai_cannot_grant` item is closed.** Open since P07: the
+application rule was tested and the database backstop never was. There is now a
+test that inserts the exact row an AI verdict would need to promote a child on
+its own authority and asserts Postgres rejects it by name.
+
+**REVIEW-QUEUE #5 is confirmed on the real path.** A child answering 20/20
+correctly, independently, on 20 separate days does **not** reach `mastered` —
+the accuracy guard demands 1.102 at n = 20. #5 had already measured that
+threshold in simulation; it now governs what a real family experiences.
+
+Six integration tests against real Postgres, 24 new unit tests, 100% branch on
+the new `domain/snapshot.py`. Two pre-existing breaks repaired on the way: the
+`required-guardrail-layer` control fixture had never been updated for the two
+chat decision points, and `test_recommendation_rag.py`'s `skill_states` upsert
+named the old two-column key.
+
+---
 
 | # | Component | Status | Branch | Tests | Coverage | Gates open |
 |---|---|---|---|---|---|---|

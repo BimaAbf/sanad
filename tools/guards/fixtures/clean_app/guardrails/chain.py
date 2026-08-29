@@ -26,4 +26,9 @@ LAYERS = {
     "tutor_judge": [ClosedEnumLayer],
     "tutor_summary": [ClinicalSafetyLayer],
     "safety_classify": [ClinicalSafetyLayer],
+    # The two chat surfaces. `child_chat` takes CandidateSetLayer rather than a
+    # safety layer because it generates nothing: it classifies an utterance into
+    # one of seven reviewed phrases, so the candidate set IS the safety property.
+    "caregiver_chat": [ClinicalSafetyLayer],
+    "child_chat": [CandidateSetLayer],
 }

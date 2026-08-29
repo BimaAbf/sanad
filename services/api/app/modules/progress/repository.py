@@ -79,6 +79,16 @@ SELECT_ROLLUPS = text("""
     ORDER BY period
 """)
 
+#: Every child the nightly rebuild has anything to rebuild for.
+#:
+#: Driven off `events` rather than `children` because the rebuild is a backstop
+#: against a rollup that drifted, and a child who has never produced an event
+#: has no rollup to drift. On a real dataset that is the difference between
+#: touching the active families and touching every family ever registered.
+SELECT_ROLLUP_CHILDREN = text("""
+    SELECT DISTINCT child_id FROM events WHERE child_id IS NOT NULL
+""")
+
 SELECT_SKILL_CARDS = text("""
     SELECT s.id AS skill_id, s.code, s.label_ar, s.category,
            st.state, st.p_known, st.due_at, st.updated_at AS last_seen_at
@@ -132,6 +142,10 @@ class ProgressRepository:
     async def skill_cards(self, child_id: str) -> list[dict[str, object]]:
         rows = await self._session.execute(SELECT_SKILL_CARDS, {"child_id": child_id})
         return [dict(row._mapping) for row in rows]
+
+    async def rollup_children(self) -> list[str]:
+        rows = await self._session.execute(SELECT_ROLLUP_CHILDREN)
+        return [str(row.child_id) for row in rows]
 
     async def ensure_partitions(self, *, today: dt.date) -> list[str]:
         """Create this month's partition and the next N. Idempotent.

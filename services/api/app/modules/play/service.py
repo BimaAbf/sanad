@@ -35,6 +35,7 @@ from app.core.errors import Conflict, NotFound
 from app.modules.children.repository import ChildrenRepository
 from app.modules.identity.domain import Role
 from app.modules.identity.service import IdentityService
+from app.modules.learning.service import MasteryService
 from app.modules.play.repository import PlayRepository
 from app.modules.play.schemas import (
     ActivityOut,
@@ -74,11 +75,13 @@ class PlayService:
         children: ChildrenRepository,
         identity: IdentityService,
         progress: ProgressService,
+        mastery: MasteryService,
     ) -> None:
         self._repo = repo
         self._children = children
         self._identity = identity
         self._progress = progress
+        self._mastery = mastery
 
     # --- sessions ----------------------------------------------------------
 
@@ -235,7 +238,25 @@ class PlayService:
             idempotency_key=f"session_end:{session_id}",
         )
         await self._progress.rollup_on_session_end(child_id=child_id, session=fact)
-        logger.info("play_session_ended", session_id=str(session_id), reason=reason)
+
+        # The mastery loop, last: it reads `attempts`, which every earlier step
+        # has already finished writing. Before this call a child could play
+        # forever without a single skill leaving `not_started` -- the attempts
+        # were stored and nothing ever folded them into a state.
+        child = await self._child_or_404(session.child_id)
+        transitions = await self._mastery.apply_session(
+            child_id=session.child_id,
+            session_id=session_id,
+            wait_time_ms=int(child.wait_time_ms),
+            now=now,
+        )
+
+        logger.info(
+            "play_session_ended",
+            session_id=str(session_id),
+            reason=reason,
+            transitions=len(transitions),
+        )
         return SessionSummary(
             session_id=session_id,
             ended_at=now,

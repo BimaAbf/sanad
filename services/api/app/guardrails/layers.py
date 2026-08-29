@@ -148,6 +148,35 @@ def enforce_numeric_fidelity(narrative: str, engine_numbers: Mapping[str, Any]) 
 
 # --- L5: clinical safety ----------------------------------------------------
 
+#: Arabic writes its clitics attached to the word, so a bare stem in a regex is
+#: a substring match on the whole language. Every one of these was a real block
+#: of a correct answer, found by running the caregiver surface live:
+#:
+#:     اقعدوا / ساعدوا / ابعدوا  -> "دوا"   -> medication
+#:     اتأخر / يتأخر (about the response latency this app measures)
+#:                              -> "تأخر"  -> deficit_framing
+#:
+#: A block is not a quiet rejection: the caregiver is told the answer was
+#: withheld and pointed at a doctor. Firing it on "sit somewhere quiet" spends
+#: the family's trust on a regex artefact.
+#:
+#: So Arabic stems are matched as WORDS -- with the clitic prefixes that
+#: legitimately attach to them, and the inflectional suffixes -- rather than
+#: anywhere inside one. `\w` is Unicode-aware in Python's `re`, so the
+#: lookarounds below are true word boundaries for Arabic script.
+#:
+#: The VOCABULARY is unchanged: every term that blocked before still blocks as
+#: a word. This fixes how they are matched, not what is forbidden -- that list
+#: is still the placeholder REVIEW-QUEUE.md #7 describes.
+_AR_PREFIX = r"(?:وال|بال|كال|فال|ال|لل|و|ف|ب|ل|ك)?"
+_AR_SUFFIX = r"(?:ات|ين|ون|ها|هم|ه|ة|ك|ي)?"
+
+
+def arabic_words(*stems: str) -> str:
+    """An alternation matching each stem as a standalone Arabic word."""
+    return rf"(?<!\w){_AR_PREFIX}(?:{'|'.join(stems)}){_AR_SUFFIX}(?!\w)"
+
+
 #: A cheap deterministic pre-filter. Catches the obvious before a model call,
 #: and it FAILS CLOSED — if the classifier errors, the keyword verdict stands.
 #:
@@ -156,11 +185,11 @@ def enforce_numeric_fidelity(narrative: str, engine_numbers: Mapping[str, Any]) 
 #: adversary who did not write the prompts. → REVIEW-QUEUE.md #7
 BLOCKED_OUTPUT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("diagnosis", re.compile(r"(?i)\b(autism|autistic|adhd|diagnos\w*|syndrome\b)")),
-    ("diagnosis", re.compile(r"(توحد|تشخيص|متلازمة)")),
+    ("diagnosis", re.compile(arabic_words("توحد", "تشخيص", "متلازمة"))),
     ("prognosis", re.compile(r"(?i)\b(will (never|always)|prognosis|by age \d)")),
-    ("prognosis", re.compile(r"(مش هيقدر|هيفضل|مستقبل\w* هيكون)")),
+    ("prognosis", re.compile(rf"مش هيقدر|{arabic_words('هيفضل')}|مستقبل\w* هيكون")),
     ("medication", re.compile(r"(?i)\b(medication|dose|dosage|mg\b|supplement|prescri\w*)")),
-    ("medication", re.compile(r"(دوا|جرعة|علاج دوائي|مكمل)")),
+    ("medication", re.compile(rf"{arabic_words('دوا', 'دواء', 'جرعة', 'مكمل')}|علاج دوائي")),
     ("therapy_prescription", re.compile(r"(?i)\b(stop (the )?therapy|discontinue|you must see)")),
     ("therapy_prescription", re.compile(r"(بطل العلاج|وقف الجلسات)")),
     ("normal_comparison", re.compile(r"(?i)\b(normal|typical) (child|children|kids)\b")),
@@ -169,8 +198,8 @@ BLOCKED_OUTPUT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "false_hope",
         re.compile(r"(?i)\b(guarantee|will definitely|cure[sd]?\b|completely (fix|heal))"),
     ),
-    ("false_hope", re.compile(r"(نضمن|هيتعالج خالص|هيبقى زي أي حد)")),
-    ("deficit_framing", re.compile(r"(متأخر|تأخر|عجز|قصور)")),
+    ("false_hope", re.compile(rf"{arabic_words('نضمن')}|هيتعالج خالص|هيبقى زي أي حد")),
+    ("deficit_framing", re.compile(arabic_words("متأخر", "تأخر", "عجز", "قصور"))),
 )
 
 #: Input categories that bypass the AI entirely and go straight to a human.

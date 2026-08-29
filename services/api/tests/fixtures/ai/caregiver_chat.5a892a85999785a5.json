@@ -1,0 +1,19 @@
+{
+  "content": {
+    "answer_ar": "ممكن تزود عدد الاختيارات لما طفلك يقدر يختار اللون من اختيارين بثقة ≥80% في ٣ جلسات متتالية ومش بيتعب قبل ما توصل ٨ دقايق. دلوقتي بعد ما اللون الأحمر بقى ثابت، جربوا تضيفوا اختيار تالت للون الأزرق في جلسة قصيرة اليوم.",
+    "used_document_ids": [
+      "profile",
+      "skill_red",
+      "skill_blue",
+      "session_2026-08-28",
+      "session_2026-08-23"
+    ]
+  },
+  "id": "chatcmpl-429fb69e-9d95-46d4-86d0-0aa88a7e9359",
+  "stop_reason": "stop",
+  "usage": {
+    "completion_tokens": 616,
+    "prompt_tokens": 984,
+    "total_tokens": 1600
+  }
+}

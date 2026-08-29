@@ -398,6 +398,39 @@ def test_blocked_output_categories_are_caught(text: str, category: str) -> None:
         enforce_clinical_safety(text)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        # "دوا" inside every plural imperative that ends in ـدوا.
+        "اقعدوا في مكان هادي من غير أي حاجة تشتته.",
+        "ساعدوا طفلك يختار اللون الأحمر من بين اتنين.",
+        "ابعدوا الشاشات وقت الجلسة.",
+        # "تأخر" inside a verb about the RESPONSE LATENCY this app measures.
+        "لو طفلك اتأخر في الرد استنى ٨ ثواني قبل ما تساعده.",
+        "متتعجلش، لو الرد يتأخر شوية ده عادي.",
+    ],
+)
+def test_arabic_clitics_do_not_trigger_a_block(text: str) -> None:
+    """Every one of these was blocked in a live caregiver session.
+
+    Arabic attaches its clitics, so a bare stem in a regex matches inside
+    unrelated words. L5 does not fail quietly -- the caregiver is told the
+    answer was withheld and pointed at a doctor -- so a false positive here
+    costs more than a missed one costs anywhere else in the chain.
+    """
+    assert screen_output(text) == []
+    enforce_clinical_safety(text)
+
+
+def test_the_definite_article_does_not_smuggle_a_blocked_term_through() -> None:
+    """The other half of the same fix: matching WORDS must not mean matching
+    only bare stems. `الدوا` and `الجرعة` are the forms a caregiver answer
+    would actually use."""
+    for text in ("الدوا اللي بياخده", "زودي الجرعة", "التشخيص بتاعه"):
+        with pytest.raises(GuardrailBlock):
+            enforce_clinical_safety(text)
+
+
 def test_safe_caregiver_prose_passes() -> None:
     enforce_clinical_safety("طفلك بيتعلم دلوقتي يمسك الكوباية. الخطوة الجاية نجرب مع بعض.")
 

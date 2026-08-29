@@ -71,7 +71,7 @@ Having a database does not write the tests that needed one. All of these are now
 | `progress/repository.py` | **0%** — every line is SQL |
 | The progress routes | Unreachable in a running instance: `set_progress_service_factory` is never called outside tests, so all four `/progress/*` routes return 503 `Progress service is not configured`. Wiring it is one line; doing so without tests would put untested SQL in the request path. |
 | `GET /me` child names | Hard-coded `display_name=""` with a comment saying the children module will fill it. That module now exists. |
-| The `ai_cannot_grant` CHECK constraint | P07 wants raw SQL proving an AI verdict cannot promote a child to `mastered`. The application rule is tested; the database backstop still is not. |
+| ~~The `ai_cannot_grant` CHECK constraint~~ | ✅ **closed 2026-08-29.** `test_the_database_refuses_a_mastered_transition_the_rule_did_not_justify` inserts the exact row an AI verdict would need to promote a child on its own authority — `to_state = 'mastered'`, `rule_satisfied = false`, `ai_verdict = 'confirm'` — and asserts Postgres rejects it by that constraint's name. Open since P07. See ADR 018. |
 | P05's LangGraph checkpointer | `AsyncPostgresSaver` now has a Postgres to point at. Nothing is built yet. |
 | Export and erasure completeness | P02 wants a walk of every foreign key to `children`. Not written. |
 | The notification dedupe guarantee | docs/10 T11 §10 wants proof that **Postgres** rejects a duplicate. What exists is an assertion about the DDL text. |

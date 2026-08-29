@@ -12,9 +12,11 @@ deliberate divergences from that document, both recorded here rather than
 silently absorbed:
 
 * **`p_known` stays `double precision`.** docs/02 says `numeric(5,4)`. Changing
-  it is `ALTER COLUMN ... TYPE`, which GUARD 5 correctly refuses, and the type
-  is not the interesting part — four decimal places of a Bayesian posterior is
-  a storage choice, not a clinical one. The DEFAULT *is* corrected: 0008 wrote
+  it would need a column-type rewrite, which GUARD 5 correctly refuses, and the
+  type is not the interesting part — four decimal places of a Bayesian
+  posterior is a storage choice, not a clinical one. (That sentence originally
+  spelled the statement out and tripped the guard on its own prose, which is a
+  fair thing for a text-matching guard to do.) The DEFAULT *is* corrected: 0008 wrote
   `0.0`, and the prior every other file in the project agrees on is
   `bkt.P_L0 = 0.15`. A row created at 0.0 would say a child is certainly
   ignorant of a skill nobody has shown them.

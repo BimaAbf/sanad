@@ -7,8 +7,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
 import json
 import sys
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 UPSERT_SKILL = """
     INSERT INTO skills (
@@ -112,11 +115,48 @@ def _eval(_args: argparse.Namespace) -> int:
     return 1
 
 
+async def _run_worker(name: str) -> int:
+    """One cron job, by name. The entrypoint a scheduler actually invokes.
+
+    A process per job rather than a resident scheduler: the cadences live in
+    `workers/schedule.py` as Cairo local times, and letting the platform's own
+    cron own the clock means the DST conversion is applied by
+    `schedule.utc_hour_for` at deploy time instead of by a long-running process
+    that was started in January and is now an hour wrong.
+    """
+    from app.core.config import get_settings
+    from app.core.db import dispose_engine, init_engine
+    from app.workers.jobs import run_job, unbuilt_jobs
+
+    engine = init_engine(get_settings())
+    now = dt.datetime.now(dt.UTC)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            result = await run_job(session, name, now=now)
+    except KeyError as refusal:
+        print(f"worker: {refusal.args[0]}", file=sys.stderr)
+        print(f"worker: unbuilt jobs are {', '.join(unbuilt_jobs())}", file=sys.stderr)
+        return 1
+    finally:
+        await dispose_engine()
+
+    print(f"worker: {name} ok — {result}")
+    return 0
+
+
+def _worker(args: argparse.Namespace) -> int:
+    return asyncio.run(_run_worker(args.job))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="sanad")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("seed", help="load seed data").set_defaults(run=_seed)
     sub.add_parser("eval", help="run the AI eval suites").set_defaults(run=_eval)
+
+    worker = sub.add_parser("worker", help="run one scheduled job by name")
+    worker.add_argument("job", help="a name from app.workers.schedule.JOBS")
+    worker.set_defaults(run=_worker)
 
     # Imported here rather than at module scope: `sanad seed` runs in the
     # migration job, and pulling the graphs, the retriever and langgraph in for

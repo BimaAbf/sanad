@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.modules.children.repository import ChildrenRepository
 from app.modules.identity.deps import CurrentCaregiver, IdentityServiceDep
+from app.modules.learning.repository import LearningRepository
+from app.modules.learning.service import MasteryService
 from app.modules.play.repository import PlayRepository
 from app.modules.play.schemas import (
     AttemptAccepted,
@@ -56,6 +58,11 @@ async def get_play_service(
         progress=ProgressService(
             store=ProgressRepository(session), history=ProgressHistory(session)
         ),
+        # Same reasoning: the mastery loop is part of what ending a session
+        # MEANS, not an optional collaborator a deployment might omit. Wiring it
+        # through a settable module factory would make "no skill ever reached
+        # mastered" a configuration state rather than a bug.
+        mastery=MasteryService(repo=LearningRepository(session)),
     )
 
 

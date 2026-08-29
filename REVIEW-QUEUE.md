@@ -177,6 +177,20 @@ mastery.
    progress (docs/06: "3–4 only for skills already at `practising` or better").
    Someone should confirm that is enough, or change the default.
 
+**Update — this is no longer a simulation result.** The mastery loop is wired
+(ADR 018), so the rule now runs on real attempts through the real API against
+real Postgres. Writing the positive-control test hit the row above exactly: a
+child answering **20 out of 20 correctly, independently, on 20 separate days**
+does **not** reach `mastered`, because at n = 20 the guard demands an accuracy
+of 1.102 — a number no child can reach. Forty attempts does it.
+
+`tests/integration/test_assessment_and_play.py::test_a_child_who_genuinely_learns_reaches_mastered`
+is that case, and its docstring carries the arithmetic. So the decision in this
+entry now governs what a real family will experience, not what a model predicts:
+**a two-choice skill cannot be credited before roughly thirty flawless
+attempts.** With one activity per skill per session, that is a lot of sessions
+on one word before a parent is told anything has been learned.
+
 ---
 
 ## #6 — 88 curriculum labels: vowelisation, phonemes, distractor pools

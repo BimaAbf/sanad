@@ -1,0 +1,24 @@
+{
+  "content": {
+    "grounded_in": [
+      "confidence",
+      "due",
+      "new",
+      "lapsed"
+    ],
+    "ordered_skill_ids": [
+      "01a04d46-d2ca-0724-2f62-eacff123aab6",
+      "01a04d46-d2c9-07e5-2858-ddc734c1483f",
+      "01a04d46-d2cb-0727-2ca7-c9a04e407a82",
+      "01a04d46-d2c6-0750-28f2-11b3ef50d0e6"
+    ],
+    "reason_ar": "نبدأ بالمهارة اللي الطفل متقنها وبعدين نرجع للونين اللي بيتدرب عليهم مع تجنب خلط الأحمر مع الأزرق."
+  },
+  "id": "chatcmpl-d0b4f42f-ba3d-4ad1-8217-34b13dbdca27",
+  "stop_reason": "stop",
+  "usage": {
+    "completion_tokens": 366,
+    "prompt_tokens": 1044,
+    "total_tokens": 1410
+  }
+}

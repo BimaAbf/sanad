@@ -25,6 +25,7 @@ leaving them behind would make the next run start from a different database.
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from typing import Any
 
@@ -442,3 +443,297 @@ async def test_a_stranger_cannot_read_an_assessment(client: AsyncClient, session
     _, _, stranger = await _seed_family(session)
     refused = await client.get(f"/assessments/{started['assessment_id']}", headers=stranger)
     assert refused.status_code == 403
+
+
+# --- the mastery loop -------------------------------------------------------
+#
+# Until this section existed, `skill_states` and `mastery_events` had exactly
+# one writer in the whole repository: the `sanad rag demo` seeder. Attempts
+# accumulated, the dashboard counted sessions and minutes, and `p_known` never
+# moved -- so no skill left `not_started` and nothing could ever reach
+# `mastered`. Every piece was built and tested; nothing called them.
+#
+# These tests are deliberately end-to-end over HTTP and real Postgres. A unit
+# test with a fake repository cannot notice that a service is never constructed.
+
+
+async def _play(
+    client: AsyncClient,
+    headers: dict[str, str],
+    child_id: str,
+    *,
+    outcomes: list[bool],
+    tag: str,
+    start_day: int = 0,
+) -> str:
+    """Run one session whose attempts are spread over one day each.
+
+    `client_ts` is client-supplied, which is what lets a test span the calendar
+    the mastery rule cares about -- two distinct days, and a correct answer at
+    least three days after the first one -- without waiting three days.
+    """
+    created = (
+        await client.post("/play/sessions", json={"child_id": child_id}, headers=headers)
+    ).json()
+    session_id = created["session_id"]
+    activity = created["activities"][0]
+
+    base = dt.datetime(2026, 3, 1, 9, 0, tzinfo=dt.UTC)
+    await client.post(
+        f"/play/sessions/{session_id}/attempts/batch",
+        json={
+            "attempts": [
+                {
+                    "activity_code": activity["activity_code"],
+                    "skill_code": activity["skill_code"],
+                    "result": "correct" if correct else "incorrect",
+                    "prompt_level": "independent",
+                    "choice_count": 2,
+                    "latency_ms": 2000,
+                    "client_ts": (base + dt.timedelta(days=start_day + n)).isoformat(),
+                    "idempotency_key": f"{tag}-{n:04d}",
+                }
+                for n, correct in enumerate(outcomes)
+            ]
+        },
+        headers=headers,
+    )
+    ended = await client.post(
+        f"/play/sessions/{session_id}/end",
+        json={"reason": "completed", "minutes": 5},
+        headers=headers,
+    )
+    assert ended.status_code == 200, ended.text
+    return str(session_id)
+
+
+async def _state_of(session, child_id: str, code: str):  # type: ignore[no-untyped-def]
+    return (
+        await session.execute(
+            text("""
+                SELECT st.state::text AS state, st.p_known, st.total_attempts,
+                       st.total_correct, st.distinct_days, st.due_at
+                FROM skill_states st JOIN skills s ON s.id = st.skill_id
+                WHERE st.child_id = CAST(:child AS uuid) AND s.code = :code
+                  -- Explicit since 0012: one skill can now hold a receptive and
+                  -- an expressive row, and an unfiltered read would pick either.
+                  AND st.modality = 'receptive'
+            """),
+            {"child": child_id, "code": code},
+        )
+    ).first()
+
+
+async def test_finishing_a_session_writes_a_skill_state(client: AsyncClient, session) -> None:  # type: ignore[no-untyped-def]
+    """The connection that was missing, stated as its acceptance criterion."""
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+
+    before = await _state_of(session, child_id, "color_red")
+    assert before is None, "no state before the child has played"
+
+    await _play(client, headers, child_id, outcomes=[True, True, True], tag="first")
+
+    after = await _state_of(session, child_id, "color_red")
+    assert after is not None, "ending a session must write a skill state"
+    assert after.total_attempts == 3
+    assert after.total_correct == 3
+    # 0.15 is the prior. Anything else means the attempts were actually folded
+    # in rather than a default row being inserted.
+    assert after.p_known > 0.15
+    assert after.state == "introduced"
+    assert after.due_at is not None, "a practised skill must be scheduled for review"
+
+
+async def test_the_transition_is_recorded_as_a_mastery_event(client: AsyncClient, session) -> None:  # type: ignore[no-untyped-def]
+    """`ai_cannot_grant` lives on `mastery_events`, so a silent transition
+    would route around the one constraint P07 asked the database to enforce."""
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+    await _play(client, headers, child_id, outcomes=[True, True], tag="evt")
+
+    rows = list(
+        await session.execute(
+            text("""
+                SELECT from_state::text AS moved_from, to_state::text AS moved_to,
+                       rule_satisfied, session_id
+                FROM mastery_events WHERE child_id = CAST(:child AS uuid)
+            """),
+            {"child": child_id},
+        )
+    )
+    assert [(r.moved_from, r.moved_to) for r in rows] == [("not_started", "introduced")]
+    assert rows[0].rule_satisfied is False
+    assert rows[0].session_id is not None, "an event must name the session that caused it"
+
+
+async def test_replaying_the_same_attempts_does_not_move_p_known(
+    client: AsyncClient, session
+) -> None:  # type: ignore[no-untyped-def]
+    """The fold restarts from the prior every time, so it is idempotent.
+
+    This is why the recompute reads the whole history instead of incrementing.
+    An incremental update would make a number in a clinical record depend on how
+    many times a retry happened to fire.
+    """
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+    session_id = await _play(client, headers, child_id, outcomes=[True, False, True], tag="idem")
+
+    first = await _state_of(session, child_id, "color_red")
+
+    replayed = await client.post(
+        f"/play/sessions/{session_id}/end",
+        json={"reason": "completed", "minutes": 5},
+        headers=headers,
+    )
+    assert replayed.status_code == 200
+
+    second = await _state_of(session, child_id, "color_red")
+    assert second.p_known == first.p_known
+    assert second.total_attempts == first.total_attempts
+
+
+async def test_a_child_who_genuinely_learns_reaches_mastered(client: AsyncClient, session) -> None:  # type: ignore[no-untyped-def]
+    """The positive control, and it is the point.
+
+    Without it the random-tapper test below is satisfied by a rule that never
+    grants mastery to anyone, which would pass every safety assertion and ship a
+    product where no child ever succeeds.
+
+    **Forty attempts, and the number is forced.** A first draft used twenty and
+    failed: at two choices the accuracy guard demands
+
+        accuracy >= chance + sqrt( ln(looks / 1e-5) / (2 * window) )
+
+    and at n = 20 that is 0.5 + 0.602 = 1.102 -- above 1.0, so a PERFECT child
+    cannot satisfy it. The break-even is around thirty attempts on one skill,
+    and the margin only relaxes as the window fills to `ACCURACY_WINDOW` = 40.
+
+    That is not a quirk of this test. REVIEW-QUEUE #5 already measured the same
+    threshold in simulation -- "2 choices, 100% accurate: 30 attempts" -- and
+    this is that number arrived at independently, over HTTP and Postgres. It is
+    a property of the addition `mastery.py` documents as unreviewed, and nobody
+    clinical has agreed to it. → REVIEW-QUEUE #5
+    """
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+
+    # Independent correct answers, one per day: distinct days, a delayed pass
+    # well past the three-day requirement, and accuracy 1.0 against chance 0.5.
+    await _play(client, headers, child_id, outcomes=[True] * 40, tag="learner")
+
+    state = await _state_of(session, child_id, "color_red")
+    assert state.state == "mastered"
+    assert state.distinct_days == 40
+
+
+async def test_a_random_tapper_never_reaches_mastered_through_the_real_path(
+    client: AsyncClient, session
+) -> None:  # type: ignore[no-untyped-def]
+    """P07's safety net, exercised through HTTP and Postgres rather than in pure code.
+
+    Alternating rather than randomised, so the test is deterministic: accuracy
+    lands on exactly 0.5, which is exactly the chance level at two choices, and
+    the anytime-valid margin in `mastery.accuracy_margin` is what has to reject
+    it. `p_known` still saturates -- that is the structural property that made
+    the addition necessary -- so this asserts on the STATE, not the estimate.
+    """
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+
+    tapping = [n % 2 == 0 for n in range(40)]
+    await _play(client, headers, child_id, outcomes=tapping, tag="tapper")
+
+    state = await _state_of(session, child_id, "color_red")
+    assert state.state != "mastered"
+    assert state.state != "retained"
+    # The estimate saturating while the state does not move is the whole reason
+    # the accuracy guard exists. Asserting it here stops anyone "fixing" the
+    # test by making p_known behave instead.
+    assert state.p_known > 0.9
+
+
+async def test_a_modality_this_session_never_touched_does_not_advance(
+    client: AsyncClient, session
+) -> None:  # type: ignore[no-untyped-def]
+    """A state with no attempts behind it must not climb the ladder.
+
+    `next_state` advances one rung whenever the mastery rule is unmet -- and for
+    a skill with an empty history it is unmet only because there is no evidence.
+    A receptive session must therefore not walk an EXPRESSIVE state forward on
+    the same skill. Found by reading the code rather than by a failure, which is
+    why it is pinned here.
+    """
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+
+    skill_id = (
+        await session.execute(text("SELECT id FROM skills WHERE code = 'color_red'"))
+    ).scalar_one()
+    await session.execute(
+        text("""
+            INSERT INTO skill_states (child_id, skill_id, modality, state, p_known)
+            VALUES (CAST(:child AS uuid), :skill, 'expressive', 'introduced', 0.4)
+        """),
+        {"child": child_id, "skill": skill_id},
+    )
+
+    await _play(client, headers, child_id, outcomes=[True, True], tag="modality")
+
+    expressive = (
+        await session.execute(
+            text("""
+                SELECT state::text AS state, p_known FROM skill_states
+                WHERE child_id = CAST(:child AS uuid) AND skill_id = :skill
+                  AND modality = 'expressive'
+            """),
+            {"child": child_id, "skill": skill_id},
+        )
+    ).one()
+    assert expressive.state == "introduced", "an untouched modality must not advance"
+    assert expressive.p_known == 0.4
+
+    receptive = await _state_of(session, child_id, "color_red")
+    assert receptive.state == "introduced", "the modality that WAS played still advances"
+
+
+async def test_the_database_refuses_a_mastered_transition_the_rule_did_not_justify(
+    client: AsyncClient, session
+) -> None:  # type: ignore[no-untyped-def]
+    """The `ai_cannot_grant` CHECK, against a real database at last.
+
+    P07 has wanted this since it was written and BLOCKED.md has carried it as
+    outstanding ever since: the application rule was tested, the database
+    backstop never was. This writes the row an AI verdict would have to write to
+    promote a child on its own authority, and asserts Postgres rejects it.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    _, child_id, headers = await _seed_family(session)
+    await _seed_skills(session)
+    await _play(client, headers, child_id, outcomes=[True], tag="check")
+
+    skill_id = (
+        await session.execute(text("SELECT id FROM skills WHERE code = 'color_red'"))
+    ).scalar_one()
+
+    with pytest.raises(IntegrityError) as raised:
+        await session.execute(
+            text("""
+                INSERT INTO mastery_events (
+                    child_id, skill_id, from_state, to_state,
+                    p_known_at_event, rule_satisfied, ai_verdict
+                ) VALUES (
+                    CAST(:child AS uuid), :skill, 'practising', 'mastered',
+                    0.9900, false, 'confirm'
+                )
+            """),
+            {"child": child_id, "skill": skill_id},
+        )
+    # The asyncpg dialect re-wraps the driver's CheckViolationError in its own
+    # IntegrityError, so the constraint's NAME in the message is the assertion
+    # that actually pins this to `ai_cannot_grant` rather than to any check.
+    assert "ai_cannot_grant" in str(raised.value.orig)
+    assert "CheckViolationError" in str(raised.value.orig)
+    await session.rollback()

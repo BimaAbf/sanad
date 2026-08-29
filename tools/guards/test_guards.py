@@ -240,17 +240,55 @@ def test_a_downgrade_may_drop_what_its_upgrade_created() -> None:
     assert "DROP COLUMN" not in destructive_migration._upgrade_body(source)
 
 
+#: Migrations that are knowingly destructive, and why.
+#:
+#: This is the test's equivalent of the `destructive-migration` PR label the
+#: guard itself honours: the guard does not claim a destructive change is wrong,
+#: it claims one should be a decision someone made in daylight. An entry here is
+#: that daylight. Anything NOT listed still fails, which is the property worth
+#: keeping -- the point of this test is that a destructive migration cannot
+#: arrive unnoticed, not that none can ever exist.
+ACKNOWLEDGED_DESTRUCTIVE: dict[str, str] = {
+    "0012_skill_states_modality_key.py": (
+        "widens skill_states' primary key to (child_id, skill_id, modality) as "
+        "docs/02 s6 specifies. 0008 keyed it on two columns, which makes a "
+        "receptive and an expressive state for one skill unrepresentable. "
+        "Requires the destructive-migration label to deploy."
+    ),
+}
+
+
 def test_every_real_migration_in_the_repo_is_additive() -> None:
     """The guard, run against the actual tree.
 
-    0005 and 0006 create tables; nothing so far drops one. If this ever fails,
-    the fix is to split the migration, not to relax the test.
+    If this fails for a migration not in `ACKNOWLEDGED_DESTRUCTIVE`, the fix is
+    to split it into an additive step and a destructive one -- not to add it to
+    the list to make the test go green.
     """
     versions = REPO_ROOT / "services" / "api" / "migrations" / "versions"
     offenders: list[str] = []
     for path in sorted(versions.glob("*.py")):
+        if path.name in ACKNOWLEDGED_DESTRUCTIVE:
+            continue
         body = destructive_migration._upgrade_body(path.read_text(encoding="utf-8"))
         for pattern in destructive_migration.DESTRUCTIVE:
             if pattern.search(body):
                 offenders.append(f"{path.name}: {pattern.pattern}")
     assert offenders == [], offenders
+
+
+def test_each_acknowledged_destructive_migration_still_exists_and_is_destructive() -> None:
+    """An entry that no longer applies is a licence nobody is watching.
+
+    If a listed migration is deleted, or rewritten to be additive, its exemption
+    has to go with it -- otherwise the list quietly grows into a blanket opt-out
+    for whatever file name happens to be in it.
+    """
+    versions = REPO_ROOT / "services" / "api" / "migrations" / "versions"
+    for name in ACKNOWLEDGED_DESTRUCTIVE:
+        path = versions / name
+        assert path.exists(), f"{name} is exempted and does not exist"
+        body = destructive_migration._upgrade_body(path.read_text(encoding="utf-8"))
+        assert any(pattern.search(body) for pattern in destructive_migration.DESTRUCTIVE), (
+            f"{name} is exempted but is now additive — remove the exemption"
+        )
