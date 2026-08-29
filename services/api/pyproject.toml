@@ -95,6 +95,9 @@ ignore = [
 # ProblemDetail is the RFC 9457 term; renaming it to ProblemDetailError would
 # make the code harder to match against the spec, not easier.
 "app/core/errors.py" = ["N818"]
+# GuardrailRejection / GuardrailBlock read as what they are; a "...Error" suffix
+# would obscure that one is recoverable and the other is not.
+"app/guardrails/layers.py" = ["N818"]
 # A CLI writes to stdout; that is its interface, not a stray debug print.
 "app/cli.py" = ["T201"]
 

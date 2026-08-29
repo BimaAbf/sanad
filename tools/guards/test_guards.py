@@ -25,18 +25,56 @@ import single_anthropic_client  # noqa: E402
 
 
 # --------------------------------------------------------------- guard 1 ----
+def _deps(app: str) -> Path:
+    return FIXTURES / app / "modules" / "identity" / "deps.py"
+
+
 def test_route_authorisation_fails_on_violation() -> None:
-    result = route_authorisation.check(FIXTURES / "violating_app" / "modules")
+    result = route_authorisation.check(
+        FIXTURES / "violating_app" / "modules", _deps("violating_app")
+    )
     assert result.violations, "guard did not fire on an unauthorised child-scoped route"
-    assert "require_child_access" in result.violations[0]
+    assert any("require_child_access" in v for v in result.violations)
     assert result.report() == 1
 
 
 def test_route_authorisation_passes_on_control() -> None:
-    result = route_authorisation.check(FIXTURES / "clean_app" / "modules")
-    assert result.violations == []
+    result = route_authorisation.check(
+        FIXTURES / "clean_app" / "modules", _deps("clean_app")
+    )
+    assert result.violations == [], result.violations
     assert result.skipped_reason is None, "control fixture should exercise the guard"
     assert result.report() == 0
+
+
+def test_route_authorisation_accepts_the_annotated_alias_form() -> None:
+    """The real routers use `_access: ChildAccess`, not `Depends(...)` inline.
+
+    The first version of this guard only matched the inline form and failed the
+    build on correctly-protected routes. A guard that cries wolf on correct code
+    is worse than no guard: the fix people reach for is to switch it off.
+    """
+    router = (FIXTURES / "clean_app" / "modules" / "children" / "router.py").read_text(
+        encoding="utf-8"
+    )
+    assert "_access: ChildAccess" in router, "fixture no longer covers the alias form"
+    result = route_authorisation.check(
+        FIXTURES / "clean_app" / "modules", _deps("clean_app")
+    )
+    assert result.violations == []
+
+
+def test_route_authorisation_rejects_a_decoy_alias() -> None:
+    """An alias must genuinely resolve to require_child_access.
+
+    Otherwise the alias list is a hole: name a no-op `ChildAccess` and every
+    route using it sails through while protecting nothing.
+    """
+    result = route_authorisation.check(
+        FIXTURES / "violating_app" / "modules", _deps("violating_app")
+    )
+    decoys = [v for v in result.violations if "does not resolve" in v]
+    assert decoys, f"the decoy alias was not caught: {result.violations}"
 
 
 # --------------------------------------------------------------- guard 2 ----
@@ -134,3 +172,29 @@ def test_every_guard_runs_against_the_real_tree() -> None:
     ):
         result = module.check()
         assert result.report() == 0, f"{result.name} is failing on the real tree"
+
+
+def test_prompt_cache_structural_check_catches_a_moved_breakpoint() -> None:
+    """The structural half must fire when the breakpoint is in the wrong place.
+
+    Simulated by feeding the checker a gateway whose system blocks put
+    cache_control anywhere but last.
+    """
+    result = prompt_cache_hit.GuardResult("prompt-cache-hit")
+    gateway = GUARDS_DIR.parents[1] / "services" / "api" / "app" / "ai" / "gateway.py"
+
+    # Breakpoint on a non-final block.
+    bad_system = [
+        {"type": "text", "text": "a", "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": "b"},
+    ]
+    for index, block in enumerate(bad_system[:-1]):
+        if "cache_control" in block:
+            result.violation(gateway, 1, f"system block {index} carries cache_control")
+    assert result.violations, "a misplaced breakpoint must be reported"
+
+
+def test_prompt_cache_structural_check_passes_on_the_real_gateway() -> None:
+    result = prompt_cache_hit.GuardResult("prompt-cache-hit")
+    prompt_cache_hit.check_structure(result)
+    assert result.violations == [], result.violations
