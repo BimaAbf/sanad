@@ -1,0 +1,14 @@
+/*
+ * VIOLATION FIXTURE — this file must FAIL stylelint.
+ *
+ * It is the proof that the no-physical-properties rule is live. CI runs
+ * stylelint against it and fails the build if it *passes*. Extension is
+ * `.css.fixture` so the normal lint glob never picks it up.
+ */
+.violating {
+  margin-left: 4px;
+  padding-right: 8px;
+  left: 0;
+  float: left;
+  text-align: right;
+}

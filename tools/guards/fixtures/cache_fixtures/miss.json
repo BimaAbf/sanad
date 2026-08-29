@@ -1,0 +1,7 @@
+{
+  "_comment": "VIOLATION FIXTURE - prompt-cache-hit guard must FAIL: second call read nothing from cache.",
+  "calls": [
+    { "usage": { "input_tokens": 4210, "cache_creation_input_tokens": 4100, "cache_read_input_tokens": 0 } },
+    { "usage": { "input_tokens": 4210, "cache_creation_input_tokens": 4100, "cache_read_input_tokens": 0 } }
+  ]
+}

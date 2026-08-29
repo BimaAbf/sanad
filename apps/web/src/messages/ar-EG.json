@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "PLACEHOLDER": "PLACEHOLDER — NOT FOR CLINICAL USE. Every string in this file is scaffolding written by an agent so the shell renders. All caregiver- and child-facing copy must be authored and signed off by a native Egyptian Arabic speaker before any family sees it. See REVIEW-QUEUE.md."
+  },
+  "app": {
+    "title": "مِسك",
+    "tagline": "رفيقك في رحلة طفلك",
+    "placeholder": "الصفحة دي لسه بتتبني."
+  },
+  "play": {
+    "title": "يلا نلعب",
+    "placeholder": "الصفحة دي لسه بتتبني."
+  },
+  "console": {
+    "title": "لوحة المتابعة",
+    "placeholder": "الصفحة دي لسه بتتبني."
+  },
+  "errors": {
+    "generic": "حصلت مشكلة مؤقتة. جرّب تاني بعد شوية."
+  }
+}

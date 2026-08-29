@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.test
 *.pem
 *.key
 !packages/**/*.key.ts
@@ -49,3 +50,6 @@ test-results/
 *.sqlite3
 .DS_Store
 Thumbs.db
+
+# fonts are build output (apps/web/scripts/sync-fonts.mjs copies them from npm)
+apps/web/public/fonts/*.woff2

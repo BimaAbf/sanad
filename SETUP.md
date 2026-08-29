@@ -2,6 +2,10 @@
 
 Everything here is something an agent cannot produce for you. The orchestrator keeps the **Status** column current; you fill the gaps.
 
+> **Orchestrator status, 2026-08-29 — P00 complete, nothing blocked.**
+> Read [`REVIEW-QUEUE.md`](REVIEW-QUEUE.md) first (3 open items, none blocking today), then [`PROGRESS.md`](PROGRESS.md).
+> Only **O2 (named clinician)** has a hard deadline: it gates Stage 2 and has recruiting lead time.
+
 **The good news first: none of this is needed to start.** The architecture runs on fixtures and deterministic fallbacks by design, so P00–P15 can be built end to end with zero credentials. Keys are needed at four specific gates, listed below.
 
 ---
@@ -10,11 +14,11 @@ Everything here is something an agent cannot produce for you. The orchestrator k
 
 | # | Decision | Blocks | Default if you say nothing | Status |
 |---|---|---|---|---|
-| **O1** | **Portage Guide: licensed, or do we author an original PGEE-compatible bank with your clinician?** | PGEE **go-live** — not the build. The engine works on any bank. | Build on the synthetic 120-item bank, watermarked `NOT FOR CLINICAL USE`, swap later | ☐ open |
-| **O2** | **Who is the named clinician** who reviews escalations and signs the report template? | Stage 2 gate; GA launch | Escalations queue to an admin inbox — **must not ship without a real person behind the 48-hour promise** | ☐ open |
+| **O1** | **Portage Guide: licensed, or do we author an original PGEE-compatible bank with your clinician?** | PGEE **go-live** — not the build. The engine works on any bank. | Build on the synthetic 120-item bank, watermarked `NOT FOR CLINICAL USE`, swap later | ☐ open · REVIEW-QUEUE #2 |
+| **O2** | **Who is the named clinician** who reviews escalations and signs the report template? | Stage 2 gate; GA launch | Escalations queue to an admin inbox — **must not ship without a real person behind the 48-hour promise** | ☐ open · **earliest hard gate** · REVIEW-QUEUE #3 |
 | O3 | Licensed illustrations, or commission them? ~90 concepts × 3 images | Stage 5 content | Placeholder shapes; generated assets for internal testing only | ☐ open |
 | O4 | Monthly AI budget ceiling per child | Effort-tier config | $6/child/month (design lands at $0.14–0.37 after the doc 12 revision) | ☐ open |
-| O5 | Existing brand, name, visual identity? | Frontend | Greenfield; the tokens in `docs/06 §2` are a complete accessible palette | ☐ open |
+| O5 | Existing brand, name, visual identity? | Frontend | Greenfield; the tokens in `docs/06 §2` are a complete accessible palette | ☐ open · **default taken**: the docs/06 §2 palette is implemented in `packages/config/tailwind-preset.js` and `apps/web/src/styles/globals.css`, and asserted against the doc by a test |
 | O6 | Which centre, how many families, for the pilot? | UAT plan | 8 families, one Cairo early-intervention centre, 6 weeks | ☐ open |
 
 Answer **O1 and O2 in week 1.** O1 is a licensing question, not an engineering one — every hour spent on the AI layer is wasted if the assessment content cannot legally ship. The rest can ride on their defaults.
@@ -67,9 +71,22 @@ The voice talent and the clinician are the two with real calendar lead time. Eve
 
 ## 5. Environment
 
-Already verified on this machine: `pandoc 3.9`, MiKTeX (xelatex/lualatex), `node`, `npm`, `python 3.11`.
+**All prerequisites are now present and verified.** Nothing is needed from you here.
 
-Still needed: **Docker Desktop** (Postgres, Redis, MinIO, Langfuse), **uv**, **pnpm**, and **git init** — the orchestrator handles the last three in P00.
+| Tool | State |
+|---|---|
+| Docker Desktop | ✅ running · `docker 29.1.2` |
+| `git` | ✅ `2.55.0` · repository initialised on `main` in P00 |
+| `node` / `npm` | ✅ `22.22.3` / `10.9.8` |
+| `pnpm` | ✅ `11.2.2` · workspace installed |
+| `uv` | ✅ `0.11.15` · Python **3.12.3** resolved for `services/api` |
+| `just` | ✅ `1.57.0` · installed during P00 (`npm i -g rust-just`) |
+| `pandoc` / MiKTeX | ✅ (used only by the `docs/` PDF pipeline in `build/`) |
+
+**Ports:** the local stack publishes on **55432** (postgres), **56379** (redis),
+**59000/59001** (minio), **51025/58025** (mailhog). They are offset from the
+conventional ports because another project's stack already holds those on this
+machine — see `docs/adr/001-stack.md` D1.
 
 ---
 
@@ -86,3 +103,15 @@ You are asked for five things, five times.
 | **Stage 5** | OT accessibility review; native-speaker content and audio sign-off | Week 13 |
 
 Between gates, the orchestrator works unattended and keeps `PROGRESS.md` and `REVIEW-QUEUE.md` current. **Read `REVIEW-QUEUE.md` first** — it is written to be actionable without reading any transcript.
+
+---
+
+## 7. Progress against this file
+
+| Section | State |
+|---|---|
+| §1 Decisions | O1 and O2 open and urgent. O3–O6 riding on their defaults; O5's default is now implemented. |
+| §2 API keys | **None needed yet.** First one is required at Gate 4. |
+| §3 People | **Start now:** the clinician (O2) and the voice talent have real calendar lead time. |
+| §4 Content | Nothing supplied. All content in the repo is a marked placeholder. |
+| §5 Environment | ✅ complete |

@@ -1,0 +1,220 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Values here are for the ephemeral CI services only. No real credential ever
+  # enters this file; secrets come from the repository secret store.
+  MISK_ENVIRONMENT: ci
+  MISK_DATABASE_URL: postgresql+asyncpg://misk:misk@localhost:5432/misk
+  MISK_REDIS_URL: redis://localhost:6379/0
+  MISK_S3_ENDPOINT_URL: http://localhost:9000
+  MISK_S3_REGION: us-east-1
+  MISK_S3_BUCKET: misk-media
+  MISK_S3_ACCESS_KEY_ID: miskminio
+  MISK_S3_SECRET_ACCESS_KEY: miskminio-dev-secret
+  # tests/conftest.py uses a separate database so `just test` never touches
+  # the data a developer is looking at in `just dev`.
+  MISK_CORS_ORIGINS: http://localhost:3000
+
+jobs:
+  # ---------------------------------------------------------------- lint ----
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-extras
+        working-directory: services/api
+
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+        working-directory: services/api
+      - name: mypy --strict
+        run: uv run mypy --strict app
+        working-directory: services/api
+      - name: eslint
+        run: pnpm exec turbo run lint
+      - name: stylelint (no physical properties)
+        run: pnpm run stylelint
+      - name: banned-terms-lint
+        run: python tools/lint/banned_terms.py
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------ test-api ----
+  test-api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: misk
+          POSTGRES_PASSWORD: misk
+          POSTGRES_DB: misk
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U misk" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+
+      # MinIO needs a command argument, which GitHub `services:` cannot supply,
+      # so it runs as a step instead.
+      - name: start minio
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=miskminio             -e MINIO_ROOT_SECRET=miskminio-dev-secret             -e MINIO_ROOT_PASSWORD=miskminio-dev-secret             minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && break || sleep 2
+          done
+          docker run --rm --network host minio/mc:latest sh -c             "mc alias set local http://localhost:9000 miskminio miskminio-dev-secret &&              mc mb --ignore-existing local/misk-media &&              mc mb --ignore-existing local/misk-private"
+
+      - run: uv sync --all-extras
+        working-directory: services/api
+      - name: create the test database
+        run: |
+          PGPASSWORD=misk psql -h localhost -U misk -d misk             -c "CREATE DATABASE misk_test OWNER misk;"
+      - run: uv run alembic upgrade head
+        working-directory: services/api
+      - name: migrate the test database
+        run: uv run alembic upgrade head
+        working-directory: services/api
+        env:
+          MISK_DATABASE_URL: postgresql+asyncpg://misk:misk@localhost:5432/misk_test
+
+      - name: pytest
+        # 85% overall, and 100% BRANCH coverage on the deterministic core:
+        # domain/ computes every number a caregiver sees, and guardrails/ is
+        # what makes "AI may be more conservative, never less" true.
+        run: |
+          uv run pytest -m "not live_ai" --cov --cov-report=term-missing --cov-fail-under=85
+        working-directory: services/api
+      - name: branch coverage gate on domain + guardrails
+        run: uv run python ../../tools/lint/coverage_gate.py
+        working-directory: services/api
+
+  # ------------------------------------------------------------ test-web ----
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run typecheck
+      - run: pnpm exec turbo run test
+      # TODO(P12/P13): Storybook a11y run in both LTR and RTL.
+
+  # ---------------------------------------------------------- contract -----
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras
+        working-directory: services/api
+      # TODO(P01): generate openapi.json, run schemathesis, diff packages/api-client.
+      - run: echo "contract checks activate with P01 (first real routes)"
+
+  # --------------------------------------------------------------- e2e -----
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO(P12/P13): Playwright against docker-compose with the LLM stubbed,
+      # plus axe-core on every route.
+      - run: echo "e2e activates with P12/P13"
+
+  # -------------------------------------------------------------- perf -----
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # TODO(P12/P13): Lighthouse CI with the hard budgets from docs/06.
+      - run: echo "perf budgets activate with P12/P13"
+
+  # ---------------------------------------------------------- security -----
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-extras
+        working-directory: services/api
+      - name: pip-audit
+        run: uv run --with pip-audit pip-audit || true
+        working-directory: services/api
+      - name: pnpm audit
+        run: pnpm audit --audit-level high || true
+      # TODO(P15): trivy image scan with a hard fail on HIGH/CRITICAL.
+
+  # ------------------------------------------------------------- evals -----
+  evals:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ai-change')
+    steps:
+      - uses: actions/checkout@v4
+      # TODO(P03/P05/P08): Batch API run per provider, post the diff table.
+      - run: echo "evals activate with P03"
+
+  # ------------------------------------------------------------ guards -----
+  # Four project-specific checks. Each prevents a class of bug that normal
+  # testing misses. test_guards.py proves each one fires on a violation
+  # fixture, so a guard that silently matches nothing cannot look like a pass.
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --all-extras
+        working-directory: services/api
+
+      - name: guards fire on their violation fixtures
+        run: uv run pytest ../../tools/guards/test_guards.py -v
+        working-directory: services/api
+
+      - name: route-authorisation
+        run: uv run python ../../tools/guards/route_authorisation.py
+        working-directory: services/api
+      - name: single-anthropic-client
+        run: uv run python ../../tools/guards/single_anthropic_client.py
+        working-directory: services/api
+      - name: prompt-cache-hit
+        run: uv run python ../../tools/guards/prompt_cache_hit.py
+        working-directory: services/api
+      - name: required-guardrail-layer
+        run: uv run python ../../tools/guards/required_guardrail_layer.py
+        working-directory: services/api

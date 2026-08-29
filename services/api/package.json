@@ -1,0 +1,12 @@
+{
+  "name": "@misk/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Thin workspace wrapper so Turborepo can drive the Python service alongside the web app. All real dependency management is uv + pyproject.toml.",
+  "scripts": {
+    "dev": "uv run uvicorn app.main:app --reload --port 8000",
+    "lint": "uv run ruff check . && uv run ruff format --check . && uv run mypy --strict app",
+    "test": "uv run pytest -m \"not live_ai\"",
+    "typecheck": "uv run mypy --strict app"
+  }
+}
