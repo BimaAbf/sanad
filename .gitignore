@@ -1,0 +1,51 @@
+# --- secrets: never commit ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!packages/**/*.key.ts
+secrets/
+
+# --- python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# --- node ---
+node_modules/
+.next/
+.turbo/
+out/
+dist/
+build/
+*.tsbuildinfo
+.eslintcache
+playwright-report/
+test-results/
+
+# --- docs build artefacts (pre-existing pipeline) ---
+/dist/
+/build/mermaid/
+/build/preprocessed/
+/build/t.png
+
+# --- infra ---
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# --- local data ---
+.docker-data/
+*.sqlite3
+.DS_Store
+Thumbs.db
