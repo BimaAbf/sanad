@@ -131,6 +131,10 @@ ignore = [
 "tests/unit/test_voice_service.py" = ["ASYNC240", "S108"]
 # A CLI writes to stdout; that is its interface, not a stray debug print.
 "app/cli.py" = ["T201"]
+# `sanad rag` is a terminal diagnostic. Its entire output is print, and
+# routing it through structlog would render the Arabic as escaped JSON --
+# unreadable for the one thing the tool exists to let a human read.
+"app/ai/inspect.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

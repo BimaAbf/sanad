@@ -356,3 +356,81 @@ async def test_graph_records_what_it_retrieved_even_when_it_falls_back() -> None
         {"child_id": "c1", "now": NOW, "snapshots": SNAPSHOTS, "labels": LABELS, "trace": []}
     )
     assert state["recommendation"].grounded_in
+
+
+# --- redaction: the date/phone collision ------------------------------------
+
+
+class TestDatesSurviveRedaction:
+    """A regression suite for a defect `sanad rag all` found in the live path.
+
+    `REGEX_STRIP`'s phone pattern is "a digit, eight or more digits and
+    separators, a digit". An ISO date is exactly that shape, so every date in an
+    outgoing payload was being rewritten to `[PHONE]` — including the `at` field
+    on every retrieved document and the date inside every milestone sentence.
+
+    The model could not reason about recency at all, which the recommendation
+    rubric explicitly asks it to do, and nothing failed: it degraded every
+    grounded answer silently. That is the failure mode these tests exist for.
+    """
+
+    @staticmethod
+    def _scrub(value: str) -> str:
+        from app.ai.redaction import Pseudonymiser
+
+        return Pseudonymiser().scrub_text(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "2026-08-21",
+            "2026-08-21T13:19:37.218216",
+            "يوم 2026-08-21 مهارة «أحمر» بقت أتقنها.",
+            "from 2026-08-21 to 2026-09-02",
+        ],
+        ids=["date", "timestamp", "milestone-sentence", "two-dates"],
+    )
+    def test_a_date_survives(self, value: str) -> None:
+        assert self._scrub(value) == value
+
+    def test_a_negative_lookahead_would_not_have_been_enough(self) -> None:
+        """Documents the fix that does NOT work, so it is not tried again.
+
+        A lookahead only refuses to START a match at the date's first character.
+        The engine restarts one character in and produces `2[PHONE]`, which is
+        worse than the original bug because it looks like a partial success.
+        """
+        assert not self._scrub("2026-08-21").startswith("2[")
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "01001234567",
+            "+201001234567",
+            "0100 123 4567",
+            "0100-123-4567",
+            "كلمني على 01001234567",
+        ],
+        ids=["mobile", "intl", "spaced", "dashed", "in-arabic-text"],
+    )
+    def test_a_phone_number_is_still_redacted(self, value: str) -> None:
+        """The guard must not have bought date fidelity with a PII leak."""
+        assert "[PHONE]" in self._scrub(value)
+
+    def test_a_date_and_a_phone_in_one_string(self) -> None:
+        scrubbed = self._scrub("يوم 2026-08-21 كلمني على 01001234567")
+        assert "2026-08-21" in scrubbed
+        assert "01001234567" not in scrubbed
+        assert "[PHONE]" in scrubbed
+
+    def test_the_document_at_field_reaches_a_payload_intact(self) -> None:
+        """The end-to-end shape of the defect, not just the regex.
+
+        `documents.py` puts an ISO date in `metadata["at"]`; `retriever.as_payload`
+        carries it into the prompt; the gateway scrubs it on the way out.
+        """
+        from app.ai.redaction import Pseudonymiser
+
+        document = build_corpus("c1", skills=[RED])[0]
+        payload = {"at": document.metadata.get("due_at") or NOW.date().isoformat()}
+        assert Pseudonymiser().scrub(payload)["at"] == NOW.date().isoformat()

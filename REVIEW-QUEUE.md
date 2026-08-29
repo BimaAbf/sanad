@@ -457,6 +457,14 @@ keyword carries the letter's *sound*, so choosing one is a phonics decision and
 belongs to a speech therapist. `REVIEWED_LETTER_KEYWORDS` names the three that
 are real; a test asserts `REVIEWED_BY` in that file is still empty.
 
+**2b. One bug this surfaced in the seed itself.** `services/api/seeds/curriculum.py`
+sets a letter's `label_egy` to its *keyword*, so `ز` carries `زرافة`. Rendering
+that literally produced an instruction reading **"وريني زرافة"** — "show me a
+giraffe" — beside a card showing `ز` and a card showing `٥`. There was no
+giraffe on the screen. The client now speaks a letter by its name (`زاي`) and
+keeps the keyword for the story moment, where it is introduced as one. The seed
+still has the bug, and `label_egy` is what feeds TTS.
+
 **3. Eighty-eight `alt_ar` strings**, agent-written. They are the only channel a
 caregiver's screen reader has for these pictures, and `docs/06 §5` makes alt
 text a mandatory column rather than a nicety.

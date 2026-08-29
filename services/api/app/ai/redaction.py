@@ -56,8 +56,46 @@ REGEX_STRIP: tuple[tuple[str, re.Pattern[str]], ...] = (
     # the phone pattern gets a chance to mangle them into a partial match.
     ("[EMAIL]", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")),
     ("[ID]", re.compile(r"\b\d{14}\b")),
-    ("[PHONE]", re.compile(r"\+?\d[\d\s\-()]{7,}\d")),
+    # The phone pattern is handled separately, by `_strip_phones`. See below.
 )
+
+#: An ISO date or timestamp. NOT a redaction pattern — the opposite.
+_ISO_DATE = r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?"
+
+#: A digit run with separators. Egyptian mobiles are 11 digits, written
+#: `01xxxxxxxxx`, `+201xxxxxxxxx`, and with spaces or dashes throughout.
+_PHONE = r"\+?\d[\d\s\-()]{7,}\d"
+
+#: Dates FIRST in the alternation, and this ordering is the whole fix.
+#:
+#: `2026-08-21` matches the phone pattern exactly — a digit, eight characters of
+#: digits and separators, a digit — so every ISO date in an outgoing payload was
+#: being rewritten to `[PHONE]`. A negative lookahead does not fix it: it stops
+#: a match starting at the date's first character, and the engine simply
+#: restarts one character in and produces `2[PHONE]`.
+#:
+#: Alternation with the date branch first does fix it, because the regex engine
+#: consumes the whole date as a match and never offers those characters to the
+#: phone branch. The date branch is then substituted with itself.
+#:
+#: The defect was found by `sanad rag all`: retrieved documents carry
+#: `"at": "2026-08-21"`, and a milestone document reads "on 2026-08-21 this
+#: skill became mastered". The model was receiving `"at": "[PHONE]"` and
+#: "on [PHONE]", so it could not reason about recency at all — one of the things
+#: the recommendation rubric explicitly asks it to do. Nothing failed; it
+#: degraded every grounded answer silently.
+#:
+#: A date is not an identifier in the sense this module protects. Date of birth
+#: is, and it is dropped BY KEY in FORBIDDEN_KEYS before any regex runs.
+_DATE_OR_PHONE = re.compile(f"(?P<date>{_ISO_DATE})|(?P<phone>{_PHONE})")
+
+
+def _strip_phones(text: str) -> str:
+    """Redact phone numbers, leaving ISO dates and timestamps intact."""
+    return _DATE_OR_PHONE.sub(
+        lambda match: match.group("date") if match.group("date") else "[PHONE]",
+        text,
+    )
 
 #: Keys dropped from any payload outright, at any depth.
 FORBIDDEN_KEYS: frozenset[str] = frozenset(
@@ -175,7 +213,9 @@ class Pseudonymiser:
             result = self._replace_normalised(result, name, token)
         for replacement, pattern in REGEX_STRIP:
             result = pattern.sub(replacement, result)
-        return result
+        # Last, and separately: it has to protect dates while redacting phones,
+        # which a (token, pattern) pair cannot express.
+        return _strip_phones(result)
 
     @staticmethod
     def _replace_normalised(text: str, needle: str, token: str) -> str:

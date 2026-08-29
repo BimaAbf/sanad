@@ -125,6 +125,21 @@ seed:
 eval:
     uv --directory {{api}} run python -m app.cli eval
 
+# Inspect the LangChain/RAG path against the real database, stage by stage:
+# the built corpus, the pgvector retrieval with scores, the red-flag screen,
+# exactly what went to the provider after redaction, and whether the answer
+# came from the model or the deterministic fallback.
+#
+#   just rag demo                     seed a child with real history
+#   just rag "all --child <uuid>"     index, then one of each
+#   just rag "ask --child <uuid> --message '...'"
+#
+# With AI_LIVE=0 (the default) nothing reaches the network and every decision
+# point reports `no_fixture` -- that is the baseline worth running first,
+# because it tells you whether retrieval and the DB half work on their own.
+rag args="demo":
+    uv --directory {{api}} run python -m app.cli rag {{args}}
+
 # Assembled from seeds/curriculum.py, so it carries a DO-NOT-RECORD banner until
 # that file's REVIEWED_BY header is filled in. See docs/setup/01-nour-voice.md.
 # Write dist/nour-recording-script.md -- the document you hand the voice talent.

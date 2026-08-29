@@ -117,6 +117,15 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("seed", help="load seed data").set_defaults(run=_seed)
     sub.add_parser("eval", help="run the AI eval suites").set_defaults(run=_eval)
+
+    # Imported here rather than at module scope: `sanad seed` runs in the
+    # migration job, and pulling the graphs, the retriever and langgraph in for
+    # a command that writes 88 rows would be a slower container start for no
+    # reason.
+    from app.ai.inspect import register as register_rag
+
+    register_rag(sub)
+
     args = parser.parse_args(argv)
     result: int = args.run(args)
     return result
