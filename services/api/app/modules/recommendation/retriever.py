@@ -124,8 +124,7 @@ class InMemoryChildMemoryRetriever(BaseRetriever):
     def _search(self, query: str) -> list[Document]:
         by_id = {document.doc_id: document for document in self.documents}
         corpus = [
-            (document.doc_id, self.embedder.embed(document.text_ar))
-            for document in self.documents
+            (document.doc_id, self.embedder.embed(document.text_ar)) for document in self.documents
         ]
         ranked = top_k(self.embedder.embed(query), corpus, k=self.k, floor=self.floor)
         return [to_langchain(by_id[doc_id], score) for doc_id, score in ranked]

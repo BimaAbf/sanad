@@ -18,6 +18,7 @@ module never to import it.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 import structlog
@@ -243,7 +244,7 @@ class AsrChain:
     the common path an exception path.
     """
 
-    def __init__(self, providers: list[AsrProvider]) -> None:
+    def __init__(self, providers: Sequence[AsrProvider]) -> None:
         self._providers = providers
 
     @property

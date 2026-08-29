@@ -4,6 +4,7 @@ The brain recommends teaching strategy; deterministic learning code owns mastery
 This module is deliberately provider-neutral so fixtures, live providers, and
 provider failures all pass through the same schema and guardrails.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -15,7 +16,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.modules.learning.domain.candidates import Candidate, CandidateKind
 from app.modules.tutor_ai.evidence import EvidenceBundle
-
 
 # Provider-neutral defaults used by fixture mode and safe recovery.
 DEFAULT_THEME = "ألعاب"
@@ -49,7 +49,11 @@ class ReviewTiming(StrEnum):
 
 class BrainDecision(BaseModel):
     """Only teaching controls are modelled; mastery is intentionally absent."""
-    model_config = ConfigDict(extra="forbid", use_enum_values=True)
+
+    # Enums stay enums (no use_enum_values): the guard compares members with
+    # `is`, and model_dump(mode="json") still serializes them to their values
+    # for the audit trail.
+    model_config = ConfigDict(extra="forbid")
 
     next_skill: str = Field(min_length=1, max_length=120)
     action: BrainAction
@@ -78,6 +82,7 @@ class BrainDecision(BaseModel):
 @dataclass(frozen=True, slots=True)
 class LearnerEvidence:
     """Provider-safe snapshot of current evidence, without child identity."""
+
     skill: str
     modality: str
     p_known: float
@@ -158,9 +163,7 @@ def _fallback(candidates: Sequence[Candidate], evidence: LearnerEvidence) -> Bra
         character="mano",
         behavior="demonstrate" if demonstrate else "encourage",
         emotion="calm" if evidence.fatigue else "encouraging",
-        reason_codes=(
-            ("LOW_MASTERY", "RECENT_ERRORS") if struggling else ("STABLE_PROGRESS",)
-        ),
+        reason_codes=(("LOW_MASTERY", "RECENT_ERRORS") if struggling else ("STABLE_PROGRESS",)),
     )
 
 
@@ -192,9 +195,8 @@ def guard_decision(
         return GuardedBrainDecision(proposed, fallback, ("unsupported_skill",))
     candidate = allowed[proposed.next_skill]
     final = proposed
-    if (
-        proposed.modality not in SUPPORTED_MODALITIES
-        or (proposed.modality != candidate.modality and proposed.modality != "visual")
+    if proposed.modality not in SUPPORTED_MODALITIES or (
+        proposed.modality != candidate.modality and proposed.modality != "visual"
     ):
         final = final.model_copy(update={"modality": candidate.modality})
         actions.append("unsupported_modality_corrected")

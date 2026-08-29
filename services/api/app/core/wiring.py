@@ -63,15 +63,11 @@ def build_asr_chain(settings: Settings) -> AsrChain:
     """
     providers = []
     if settings.asr_qwen_base_url:
-        providers.append(
-            qwen_provider(HttpxAsrTransport(base_url=settings.asr_qwen_base_url))
-        )
+        providers.append(qwen_provider(HttpxAsrTransport(base_url=settings.asr_qwen_base_url)))
     if settings.groq_api_key:
         providers.append(
             groq_whisper_provider(
-                HttpxAsrTransport(
-                    base_url=settings.groq_base_url, api_key=settings.groq_api_key
-                )
+                HttpxAsrTransport(base_url=settings.groq_base_url, api_key=settings.groq_api_key)
             )
         )
     if not providers:

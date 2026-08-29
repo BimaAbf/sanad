@@ -109,8 +109,7 @@ def upgrade() -> None:
         "ON attempts (child_id, skill_id, created_at DESC)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS attempts_session_created "
-        "ON attempts (session_id, created_at)"
+        "CREATE INDEX IF NOT EXISTS attempts_session_created ON attempts (session_id, created_at)"
     )
 
     op.execute("""
@@ -153,9 +152,7 @@ def upgrade() -> None:
     """)
     # Every search is scoped to one child, so the child filter has to be an
     # index seek rather than a filter applied after an ANN scan of everyone.
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS child_memory_child ON child_memory (child_id, kind)"
-    )
+    op.execute("CREATE INDEX IF NOT EXISTS child_memory_child ON child_memory (child_id, kind)")
     # HNSW over cosine distance. The vectors are L2-normalised by the embedder,
     # so cosine and inner product rank identically; cosine is used because it is
     # the operator the query is written with and a mismatch between operator and

@@ -3,6 +3,7 @@
 The repository stores structured decisions and short reason codes only. Callers
 must not pass chain-of-thought or raw child identity into these methods.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,6 @@ from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
 
 INSERT_AI_DECISION = text("""
     INSERT INTO ai_decisions (
@@ -62,7 +62,7 @@ class TutorAuditRepository:
                 },
             )
         ).one()
-        return row.id
+        return UUID(row.id)
 
 
 __all__ = ["TutorAuditRepository"]

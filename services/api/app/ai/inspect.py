@@ -108,9 +108,9 @@ def _gateway(settings: Settings) -> LlmGateway:
     )
 
 
-def _services(session: AsyncSession, settings: Settings) -> tuple[
-    RecommendationService, ChatService, LlmGateway
-]:
+def _services(
+    session: AsyncSession, settings: Settings
+) -> tuple[RecommendationService, ChatService, LlmGateway]:
     gateway = _gateway(settings)
     # No Redis. The consent gate reads through to Postgres without it, which is
     # slower and fail-closed -- the right direction for a consent check to fail
@@ -277,9 +277,7 @@ async def _seed_demo(session: AsyncSession) -> str:
 
     skills = list(await session.execute(text(SELECT_SKILLS_FOR_DEMO)))
     if len(skills) < 3:
-        raise RuntimeError(
-            "the skills catalogue is empty or too small; run `just seed` first"
-        )
+        raise RuntimeError("the skills catalogue is empty or too small; run `just seed` first")
     target, confusable, mastered = skills[0], skills[1], skills[2]
 
     states = (
@@ -290,8 +288,14 @@ async def _seed_demo(session: AsyncSession) -> str:
     for skill_id, state, p_known, due_at in states:
         await session.execute(
             text(INSERT_STATE),
-            {"child": child_id, "skill": skill_id, "modality": "receptive",
-             "state": state, "p_known": p_known, "due_at": due_at},
+            {
+                "child": child_id,
+                "skill": skill_id,
+                "modality": "receptive",
+                "state": state,
+                "p_known": p_known,
+                "due_at": due_at,
+            },
         )
 
     # Three sessions, the most recent cut short by fatigue.
@@ -302,9 +306,16 @@ async def _seed_demo(session: AsyncSession) -> str:
         started = now - dt.timedelta(days=days_ago)
         await session.execute(
             text(INSERT_SESSION),
-            {"id": session_id, "child": child_id, "caregiver": caregiver_id,
-             "done": done, "correct": correct, "reason": reason,
-             "started": started, "ended": started + dt.timedelta(minutes=7 - index)},
+            {
+                "id": session_id,
+                "child": child_id,
+                "caregiver": caregiver_id,
+                "done": done,
+                "correct": correct,
+                "reason": reason,
+                "started": started,
+                "ended": started + dt.timedelta(minutes=7 - index),
+            },
         )
         for attempt in range(done):
             # The confusion: on the target skill they keep tapping the same
@@ -328,8 +339,14 @@ async def _seed_demo(session: AsyncSession) -> str:
 
     await session.execute(
         text(INSERT_MILESTONE),
-        {"child": child_id, "skill": mastered.id, "from_state": "practising",
-         "to_state": "mastered", "p_known": 0.94, "at": now - dt.timedelta(days=8)},
+        {
+            "child": child_id,
+            "skill": mastered.id,
+            "from_state": "practising",
+            "to_state": "mastered",
+            "p_known": 0.94,
+            "at": now - dt.timedelta(days=8),
+        },
     )
     await session.commit()
     return child_id
@@ -475,9 +492,7 @@ async def _run(command: str, args: argparse.Namespace) -> int:
             _out("  screen -> classify (closed set of reviewed phrases)")
             _out()
             _print_screen(heard, next_node="classify")
-            turn = await chat.ask_child(
-                child_id=child_id, caregiver_id=caregiver_id, heard=heard
-            )
+            turn = await chat.ask_child(child_id=child_id, caregiver_id=caregiver_id, heard=heard)
             await session.commit()
             _out()
             _out(f"  OUTCOME  : {turn.outcome.value}")
@@ -488,8 +503,10 @@ async def _run(command: str, args: argparse.Namespace) -> int:
         if command == "all":
             _stage("7. transcript now in the database")
             for message_row in await chat.history(child_id, Surface.CAREGIVER, limit=6):
-                _out(f"  {message_row.role.value:9} [{message_row.outcome.value:9}] "
-                     f"{message_row.text_ar}")
+                _out(
+                    f"  {message_row.role.value:9} [{message_row.outcome.value:9}] "
+                    f"{message_row.text_ar}"
+                )
         return 0
     finally:
         await session.close()

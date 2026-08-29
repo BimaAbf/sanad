@@ -10,7 +10,6 @@ from app.modules.tutor_ai.brain import (
     decide,
 )
 
-
 CANDIDATES = [
     Candidate("counting", "receptive", CandidateKind.DUE, 0),
     Candidate("colors", "visual", CandidateKind.CONFIDENCE, 1),
@@ -77,6 +76,35 @@ def test_unsafe_model_skill_falls_back_to_candidate() -> None:
     assert result.actions == ("unsupported_skill",)
 
 
+def test_new_skill_proposal_cannot_advance() -> None:
+    # Regression: with use_enum_values=True the `is BrainAction.ADVANCE`
+    # guard was dead code and this safety check never fired.
+    new_candidate = [
+        Candidate("shapes", "visual", CandidateKind.NEW, 0),
+        Candidate("counting", "receptive", CandidateKind.DUE, 1),
+    ]
+    proposed = BrainDecision(
+        next_skill="shapes",
+        action=BrainAction.ADVANCE,
+        difficulty=2,
+        strategy=TeachingStrategy.INDEPENDENT_PRACTICE,
+        modality="visual",
+        support_level="low",
+        demonstrate_first=False,
+        repeat=False,
+        review_timing="none",
+        activity_type="listen_point",
+        theme="games",
+        character="mano",
+        behavior="encourage",
+        emotion="encouraging",
+        reason_codes=["MODEL_DECISION"],
+    )
+    result = decide(new_candidate, LearnerEvidence("shapes", "visual", 0.7), proposed)
+    assert result.final.action is BrainAction.CONTINUE
+    assert "new_skill_cannot_advance" in result.actions
+
+
 def test_fatigue_caps_difficulty_and_supports_child() -> None:
     proposed = BrainDecision(
         next_skill="counting",
@@ -95,7 +123,9 @@ def test_fatigue_caps_difficulty_and_supports_child() -> None:
         emotion="encouraging",
         reason_codes=["MODEL_DECISION"],
     )
-    result = decide(CANDIDATES, LearnerEvidence("counting", "receptive", 0.7, fatigue=True), proposed)
+    result = decide(
+        CANDIDATES, LearnerEvidence("counting", "receptive", 0.7, fatigue=True), proposed
+    )
     assert result.final.difficulty == 1
     assert result.final.support_level.value == "high"
     assert "fatigue_difficulty_capped" in result.actions

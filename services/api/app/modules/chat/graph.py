@@ -163,9 +163,7 @@ def caregiver_chain(identifiers: list[str]) -> GuardrailChain:
     )
 
 
-def build_caregiver_graph(
-    *, retriever: BaseRetriever, runnable: GatewayRunnable | None
-) -> Any:
+def build_caregiver_graph(*, retriever: BaseRetriever, runnable: GatewayRunnable | None) -> Any:
     async def screen_input(state: ChatState) -> dict[str, Any]:
         result = screen(state["message"])
         if result.escalate:

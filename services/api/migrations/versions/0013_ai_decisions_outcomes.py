@@ -6,9 +6,11 @@ reasoning is intentionally never persisted. Child-owned rows cascade on erasure.
 Revision ID: 0013_ai_decisions_outcomes
 Revises: 0012_skill_states_modality_key
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
+
 from alembic import op
 
 revision: str = "0013_ai_decisions_outcomes"
@@ -34,7 +36,9 @@ def upgrade() -> None:
             created_at timestamptz NOT NULL DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS ai_decisions_child_created ON ai_decisions (child_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ai_decisions_child_created ON ai_decisions (child_id, created_at DESC)"
+    )
     op.execute("""
         CREATE TABLE IF NOT EXISTS activity_outcomes (
             id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
@@ -64,7 +68,9 @@ def upgrade() -> None:
             created_at timestamptz NOT NULL DEFAULT now()
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS activity_outcomes_child_created ON activity_outcomes (child_id, created_at DESC)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS activity_outcomes_child_created ON activity_outcomes (child_id, created_at DESC)"
+    )
 
 
 def downgrade() -> None:

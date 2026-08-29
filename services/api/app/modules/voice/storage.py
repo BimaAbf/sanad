@@ -8,6 +8,8 @@ here that knows which it is talking to.
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 
 from app.core.config import Settings
@@ -22,10 +24,8 @@ class S3AudioSink:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def _client(self):  # type: ignore[no-untyped-def]
-        return session_for(self._settings).client(
-            "s3", endpoint_url=self._settings.s3_endpoint_url
-        )
+    def _client(self) -> Any:
+        return session_for(self._settings).client("s3", endpoint_url=self._settings.s3_endpoint_url)
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> str:
         async with self._client() as client:
@@ -47,9 +47,7 @@ class S3AudioSink:
         deleted = 0
         async with self._client() as client:
             paginator = client.get_paginator("list_objects_v2")
-            async for page in paginator.paginate(
-                Bucket=self._settings.s3_bucket, Prefix=prefix
-            ):
+            async for page in paginator.paginate(Bucket=self._settings.s3_bucket, Prefix=prefix):
                 keys = [{"Key": item["Key"]} for item in page.get("Contents", [])]
                 if not keys:
                     continue
@@ -64,9 +62,7 @@ class S3AudioSink:
         keys: list[str] = []
         async with self._client() as client:
             paginator = client.get_paginator("list_objects_v2")
-            async for page in paginator.paginate(
-                Bucket=self._settings.s3_bucket, Prefix=prefix
-            ):
+            async for page in paginator.paginate(Bucket=self._settings.s3_bucket, Prefix=prefix):
                 keys.extend(str(item["Key"]) for item in page.get("Contents", []))
         return keys
 

@@ -153,9 +153,7 @@ CHILD_PHRASES: tuple[ChildPhrase, ...] = (
     ),
 )
 
-CHILD_PHRASES_BY_ID: dict[str, ChildPhrase] = {
-    phrase.phrase_id: phrase for phrase in CHILD_PHRASES
-}
+CHILD_PHRASES_BY_ID: dict[str, ChildPhrase] = {phrase.phrase_id: phrase for phrase in CHILD_PHRASES}
 
 #: The phrase used when no model answered. Not "greet": a fallback that greets
 #: a child mid-conversation reads as Nour having forgotten them.
@@ -182,9 +180,7 @@ def resolve_child_phrase(phrase_id: str | None) -> ChildPhrase:
 #: Shown when no model answered a caregiver. It says what happened rather than
 #: producing a generic sentence that reads like an answer -- a caregiver who
 #: thinks they got an answer will not ask again.
-CAREGIVER_FALLBACK_AR = (
-    "مش قادر أجاوب دلوقتي. تقدر تشوف تفاصيل تقدّم طفلك من صفحة المهارات."
-)
+CAREGIVER_FALLBACK_AR = "مش قادر أجاوب دلوقتي. تقدر تشوف تفاصيل تقدّم طفلك من صفحة المهارات."
 
 #: Shown when the input screen finds a red flag. The model is never called.
 #: docs/04e: red-flag input bypasses the AI entirely and goes to a human.
@@ -194,9 +190,7 @@ CAREGIVER_ESCALATION_AR = (
 )
 
 #: Shown when a guardrail blocked what the model said.
-CAREGIVER_BLOCKED_AR = (
-    "الرد اللي طلع مكانش مناسب فمنعناه. لو السؤال مهم، اسأل دكتور طفلك."
-)
+CAREGIVER_BLOCKED_AR = "الرد اللي طلع مكانش مناسب فمنعناه. لو السؤال مهم، اسأل دكتور طفلك."
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,8 +235,7 @@ def recent(
 ) -> list[dict[str, str]]:
     """Prior turns as the plain JSON the gateway serialises, oldest first."""
     return [
-        {"role": message.role.value, "text": message.text_ar}
-        for message in list(messages)[-turns:]
+        {"role": message.role.value, "text": message.text_ar} for message in list(messages)[-turns:]
     ]
 
 

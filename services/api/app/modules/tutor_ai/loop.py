@@ -3,10 +3,10 @@
 This is the seam used by API/session adapters: evidence in, guarded structured
 decision out, optional audit persistence. Mastery remains outside this module.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 from uuid import UUID
 
 from app.modules.learning.domain.candidates import Candidate
