@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import AsyncIterator
-from email.utils import parsedate_to_datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -85,6 +84,7 @@ def _to_response(child: Child) -> ChildResponse:
         session_minutes=child.session_minutes,
         hearing_aid=child.hearing_aid,
         glasses=child.glasses,
+        version=child.version,
         updated_at=child.updated_at,
     )
 
@@ -119,7 +119,10 @@ async def read_child(
     response: Response,
 ) -> ChildResponse:
     child = await service.get_child_or_404(child_id)
-    # Echoed so a client can send it straight back as If-Unmodified-Since.
+    # ETag is the authoritative concurrency token; Last-Modified is informational
+    # only, because its whole-second resolution cannot separate two writes in the
+    # same second (docs/adr/003-consent-model.md).
+    response.headers["ETag"] = f'"{child.version}"'
     response.headers["Last-Modified"] = child.updated_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
     return _to_response(child)
 
@@ -128,23 +131,25 @@ async def read_child(
 async def patch_child(
     child_id: UUID,
     payload: ChildPatch,
+    response: Response,
     _access: ChildAccess,
     service: ChildrenServiceDep,
     session: Annotated[AsyncSession, Depends(get_session)],
-    if_unmodified_since: Annotated[str | None, Header()] = None,
+    if_match: Annotated[str | None, Header()] = None,
 ) -> ChildResponse:
-    since: dt.datetime | None = None
-    if if_unmodified_since:
+    expected_version: int | None = None
+    if if_match:
         try:
-            since = parsedate_to_datetime(if_unmodified_since)
-        except (TypeError, ValueError) as exc:
-            raise BadRequest(detail="If-Unmodified-Since is not a valid HTTP date.") from exc
-        if since.tzinfo is None:
-            since = since.replace(tzinfo=dt.UTC)
+            expected_version = int(if_match.strip().strip('"').lstrip("W/").strip('"'))
+        except ValueError as exc:
+            raise BadRequest(detail='If-Match must be the ETag this API served, e.g. "3".') from exc
 
     changes = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
-    child = await service.patch_child(child_id=child_id, changes=changes, if_unmodified_since=since)
+    child = await service.patch_child(
+        child_id=child_id, changes=changes, expected_version=expected_version
+    )
     await session.commit()
+    response.headers["ETag"] = f'"{child.version}"'
     return _to_response(child)
 
 

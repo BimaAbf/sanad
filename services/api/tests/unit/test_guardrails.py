@@ -794,3 +794,60 @@ async def test_the_live_path_refuses_rather_than_pretending() -> None:
             schema_model=Interpretation,
             volatile={"nothing": "recorded-for-this"},
         )
+
+
+# ============================================================================
+# Remaining branches — each is a real edge case, not coverage chasing
+# ============================================================================
+
+
+def test_extra_names_are_redacted_as_a_generic_person() -> None:
+    """A sibling named in an answer is still a person's name on the wire."""
+    pseudo = Pseudonymiser(child_name="يوسف", extra_names=["منة"])
+    scrubbed = pseudo.scrub_text("يوسف بيلعب مع منة")
+    assert "منة" not in scrubbed
+    assert "{{PERSON}}" in scrubbed
+
+
+def test_a_pseudonymiser_with_no_names_still_strips_patterns() -> None:
+    """The regex strip must not depend on a name being configured."""
+    assert "[PHONE]" in Pseudonymiser().scrub_text("رقمي 01001234567")
+
+
+def test_an_empty_name_is_ignored_rather_than_matching_everything() -> None:
+    """An empty needle would otherwise match at every position."""
+    pseudo = Pseudonymiser(child_name="", caregiver_name="")
+    assert pseudo.scrub_text("نص عادي") == "نص عادي"
+
+
+def test_replace_normalised_returns_text_unchanged_for_an_empty_needle() -> None:
+    assert Pseudonymiser._replace_normalised("abc", "", "X") == "abc"
+
+
+def test_contains_identifier_ignores_empty_identifiers() -> None:
+    """An empty identifier would match any payload and produce a false leak."""
+    assert contains_identifier({"a": "b"}, ["", "  ".strip()]) == []
+
+
+def test_a_non_numeric_token_normalises_to_itself() -> None:
+    """The digit regex can match something float() rejects; it must not raise."""
+    assert normalise_number("1.2.3") == "1.2.3"
+    assert normalise_number("...") == "..."
+
+
+def test_a_caregiver_name_alone_is_redacted_without_a_child_name() -> None:
+    """The name-pattern loop must handle a partially-configured pseudonymiser."""
+    pseudo = Pseudonymiser(caregiver_name="منى")
+    assert CAREGIVER_TOKEN in pseudo.scrub_text("منى قالت كده")
+    assert CHILD_TOKEN not in pseudo.scrub_text("منى قالت كده")
+
+
+def test_a_name_that_is_only_diacritics_is_skipped_not_matched_everywhere() -> None:
+    """Garbage in a profile field must not become an empty needle.
+
+    An empty needle matches at every position, which would replace the entire
+    answer with tokens and destroy the caregiver's own words.
+    """
+    pseudo = Pseudonymiser(child_name="\u064b\u064f")  # two lone tashkeel marks
+    answer = "بيمسك الكوباية لوحده"
+    assert pseudo.scrub_text(answer) == answer

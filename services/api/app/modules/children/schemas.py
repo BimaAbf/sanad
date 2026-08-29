@@ -83,6 +83,7 @@ class ChildResponse(BaseModel):
     session_minutes: int
     hearing_aid: bool
     glasses: bool
+    version: int
     updated_at: dt.datetime
 
 

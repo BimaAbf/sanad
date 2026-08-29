@@ -175,14 +175,21 @@ class ChildrenService:
         *,
         child_id: UUID,
         changes: dict[str, object],
-        if_unmodified_since: dt.datetime | None,
+        expected_version: int | None = None,
     ) -> Child:
+        """Update a child, optionally under optimistic concurrency.
+
+        `expected_version` comes from the ETag the client was served. A
+        timestamp cannot do this job: HTTP-date headers have whole-second
+        resolution, so two writes in the same second are indistinguishable and
+        both would win. See docs/adr/003-consent-model.md.
+        """
         now = dt.datetime.now(dt.UTC)
-        if if_unmodified_since is not None:
-            ok = await self.repo.patch_child_if_unmodified(
+        if expected_version is not None:
+            ok = await self.repo.patch_child_if_version_matches(
                 child_id=child_id,
                 changes=changes,
-                if_unmodified_since=if_unmodified_since,
+                expected_version=expected_version,
                 now=now,
             )
             if not ok:
@@ -190,8 +197,9 @@ class ChildrenService:
                 raise StaleWrite(
                     detail="The child was modified by someone else.",
                     extra={
+                        "current_version": current.version,
+                        "your_version": expected_version,
                         "current_updated_at": current.updated_at.isoformat(),
-                        "your_if_unmodified_since": if_unmodified_since.isoformat(),
                         "conflicting_fields": sorted(changes),
                     },
                 )

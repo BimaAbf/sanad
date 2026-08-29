@@ -60,6 +60,10 @@ class Child(Base):
     session_minutes: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="8")
     hearing_aid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     glasses: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    #: Monotonic, incremented on every write. The authoritative optimistic-
+    #: concurrency token: an If-Unmodified-Since timestamp has whole-second
+    #: resolution and cannot separate two writes in the same second.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
     archived_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

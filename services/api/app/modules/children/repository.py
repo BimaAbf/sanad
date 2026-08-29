@@ -37,36 +37,39 @@ class ChildrenRepository:
         self, *, child_id: UUID, changes: dict[str, Any], now: dt.datetime
     ) -> None:
         await self.session.execute(
-            update(Child).where(Child.id == child_id).values(**changes, updated_at=now)
+            update(Child)
+            .where(Child.id == child_id)
+            .values(**changes, updated_at=now, version=Child.version + 1)
         )
 
-    async def patch_child_if_unmodified(
+    async def patch_child_if_version_matches(
         self,
         *,
         child_id: UUID,
         changes: dict[str, Any],
-        if_unmodified_since: dt.datetime,
+        expected_version: int,
         now: dt.datetime,
     ) -> bool:
-        """Optimistic concurrency. False means someone else wrote first.
+        """Optimistic concurrency on a monotonic counter. False means a conflict.
 
-        The `updated_at <= :since` predicate is what makes this atomic: two
-        concurrent PATCHes both read the same updated_at, but only one UPDATE
-        matches a row, so the loser gets rowcount 0 rather than silently
-        clobbering the winner.
+        The `version = :expected` predicate is what makes this atomic: two
+        concurrent PATCHes both read version N, but only one UPDATE matches a
+        row, so the loser gets no row back rather than silently clobbering the
+        winner.
 
-        Compared with a one-second tolerance because HTTP-date headers have
-        whole-second resolution, so a client echoing back a header it received
-        would otherwise never match a microsecond-precision timestamp.
+        A version counter rather than `updated_at`: HTTP-date headers have
+        whole-second resolution, so two writes in the same second are
+        indistinguishable by timestamp and BOTH would succeed. See
+        docs/adr/003-consent-model.md.
         """
         result = await self.session.execute(
             text("""
-                UPDATE children SET updated_at = :now
-                WHERE id = :child_id
-                  AND updated_at <= :since + interval '1 second'
-                RETURNING id
+                UPDATE children
+                SET version = version + 1, updated_at = :now
+                WHERE id = :child_id AND version = :expected
+                RETURNING version
             """),
-            {"child_id": child_id, "since": if_unmodified_since, "now": now},
+            {"child_id": child_id, "expected": expected_version, "now": now},
         )
         if result.first() is None:
             return False
