@@ -87,13 +87,29 @@ _PHONE = r"\+?\d[\d\s\-()]{7,}\d"
 #:
 #: A date is not an identifier in the sense this module protects. Date of birth
 #: is, and it is dropped BY KEY in FORBIDDEN_KEYS before any regex runs.
-_DATE_OR_PHONE = re.compile(f"(?P<date>{_ISO_DATE})|(?P<phone>{_PHONE})")
+#:
+#: A uuid needs the same protection for the same reason. `01a04d46-d2c9-07e5-
+#: 2858-ddc734c1483f` contains `9-07e5-2858-ddc` — a digit, eight characters of
+#: digits and separators, a digit — so any uuid whose middle happens to be
+#: digit-heavy came out as `01a04d46-d2c[PHONE]f2-11b3ef50d0e6`. Skill ids are
+#: sent to the judge and its answer is checked back against the candidate set,
+#: so a mangled id is a plan that fails `CandidateSetLayer` and silently falls
+#: back to the engine — visible only as a lower AI-source rate. The branch goes
+#: BEFORE the phone branch for the same reason the date branch does.
+_UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+
+_DATE_OR_PHONE = re.compile(
+    f"(?P<date>{_ISO_DATE})|(?P<uuid>{_UUID})|(?P<phone>{_PHONE})"
+)
 
 
 def _strip_phones(text: str) -> str:
     """Redact phone numbers, leaving ISO dates and timestamps intact."""
     return _DATE_OR_PHONE.sub(
-        lambda match: match.group("date") if match.group("date") else "[PHONE]",
+        # Only the phone branch is redacted; the date and uuid branches
+        # substitute with themselves, which is what keeps their digits out of
+        # the phone branch's reach.
+        lambda match: "[PHONE]" if match.group("phone") else match.group(0),
         text,
     )
 
