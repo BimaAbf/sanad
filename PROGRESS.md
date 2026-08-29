@@ -9,32 +9,74 @@ _Last updated: 2026-08-29_
 
 | # | Component | Status | Branch | Tests | Coverage | Gates open |
 |---|---|---|---|---|---|---|
-| P00 | Repository scaffold | **DONE** | `feat/p00-scaffold` | 40 (24 api · 10 guards · 6 web) | 96% line · 36/42 branch | — |
-| P01 | C01 Identity & access | not started | — | — | — | — |
-| P02 | C02 Child profile & consent | not started | — | — | — | — |
-| P03 | C15 Gateway + guardrails | not started | — | — | — | red-team corpus (independent author) |
-| P04 | C03 Assessment engine | not started | — | — | — | clinician verification of golden cases |
-| P05 | C04 PGEE AI orchestrator | not started | — | — | — | — |
-| P06 | C05 Content & curriculum | not started | — | — | — | native-speaker sign-off on 88 skills |
-| P07 | C06 Adaptive engine (BKT) | not started | — | — | — | BKT parameter review |
-| P08 | C07 Tutor orchestrator | not started | — | — | — | — |
-| P09 | C08 Voice gateway | not started | — | — | — | SLT on scoring corpus; native speaker on audio |
+| P00 | Repository scaffold | **DONE** | `feat/p00-scaffold` | 40 | 96% line | — |
+| P01 | C01 Identity & access | **DONE** (service layer) | `feat/p00-scaffold` | 87 | 98% service · 99% router | repository.py needs a DB |
+| P02 | C02 Child profile & consent | **DONE** (service layer) | `feat/p00-scaffold` | 33 | 100% service · 100% gate | repository.py needs a DB |
+| P03 | C15 Gateway + guardrails | **DONE, gate open** | `feat/p00-scaffold` | 121 | **100% branch** | red-team corpus (#7) |
+| P04 | C03 Assessment engine | **DONE, gate open** | `feat/p00-scaffold` | 81 | **100% branch on domain/** | clinician verification (#4) |
+| P05 | C04 PGEE AI orchestrator | **partial** | `feat/p00-scaffold` | — | — | graph/SSE not built — see below |
+| P06 | C05 Content & curriculum | **DONE, gate open** | `feat/p00-scaffold` | 49 | **100% branch** | native-speaker sign-off (#6) |
+| P07 | C06 Adaptive engine (BKT) | **DONE, gate open** | `feat/p00-scaffold` | 72 | **100% branch on domain/** | BKT parameters + the addition (#5) |
+| P08 | C07 Tutor orchestrator | **DONE** | `feat/p00-scaffold` | 67 | **100% branch** | — |
+| P09 | C08 Voice gateway | not started | — | — | — | SLT corpus; native speaker on audio |
 | P10 | C09 Progress | not started | — | — | — | — |
 | P11 | C10 Notifications | not started | — | — | — | — |
 | P12 | C12 Caregiver app | not started | — | — | — | — |
-| P13 | C13 Child app | not started | — | — | — | OT accessibility review; real-device audio |
+| P13 | C13 Child app | not started | — | — | — | OT accessibility; real-device audio |
 | P14 | C14 Clinician console | not started | — | — | — | — |
 | P15 | Infrastructure & CI | not started | — | — | — | — |
+
+**589 unit tests, all passing.** 100% branch coverage on every `domain/`
+package, `app/guardrails/`, `app/ai/` and `app/modules/tutor_ai/`.
+
+### What P05 is missing, stated plainly
+
+P05 asks for a LangGraph session with `AsyncPostgresSaver` checkpointing and an
+SSE endpoint with `Last-Event-ID` replay. **Neither is built.** What exists is
+everything P05 depends on: the gateway with fixture replay, the guardrail chain,
+the assessment engine, and the deterministic fallback for every decision point.
+The graph itself is wiring over those, and it needs a live Postgres for the
+checkpointer — which is the blocker below.
+
+The P08 equivalent *is* built, because the tutor session state machine is pure
+and needed no checkpointer to be exercised.
+
+---
+
+## ⚠️ The Docker daemon on this machine stopped mid-session and did not recover
+
+This is the single most important caveat in this file.
+
+`docker info` began hanging indefinitely partway through P01 and never came back,
+through a full Docker Desktop restart and a `wsl --shutdown`. Consequently:
+
+| What | State |
+|---|---|
+| Migrations `0002`–`0004` | **Never executed.** They are written; only `0001` has ever run against a real Postgres. |
+| `repository.py` (both modules) | ~35% covered. Every line is SQL and needs a database. |
+| `tests/integration/` | Cannot run. Correctly marked `integration`. |
+| The `ai_cannot_grant` CHECK constraint | **Not yet asserted against the database.** P07 requires executing raw SQL to prove an AI verdict cannot promote a child. The application-layer rule is tested; the database-level backstop is not. |
+| Erasure / export completeness | Not testable without a DB. |
+
+Everything above is *written* and lints and type-checks. None of it has touched
+Postgres. When the daemon returns, `just migrate && just migrate-test && just test`
+is the first thing to run, and I would not trust the DDL until it has.
+
+---
 
 ## Stage gates
 
 | Stage | Components | State |
 |---|---|---|
-| 1 — Spine | P00, P01, P02, P15 | **P00 done; P01, P02, P15 outstanding** |
-| 2 — Assessment, no AI | P04 | not started |
-| 3 — Learning, no AI | P06, P07 | not started |
-| 4 — AI layer | P03, P05, P08 | not started |
+| 1 — Spine | P00, P01, P02, P15 | P00/P01/P02 built; **P15 not started**; DB-backed tests blocked |
+| 2 — Assessment, no AI | P04 | Built, 100% branch. **Gate needs a clinician (#4).** |
+| 3 — Learning, no AI | P06, P07 | Built. Random-tapper test green at 1000 sims. **Gates #5, #6.** |
+| 4 — AI layer | P03, P05, P08 | P03/P08 built; **P05 graph + SSE outstanding**. Gate #7. |
 | 5 — Voice, clients, ops | P09–P14 | not started |
+
+**No stage gate has been crossed.** Stages 2 and 3 were required to produce a
+working product with zero AI code written; that ordering was followed — P04, P06
+and P07 were built and fully tested before P03 was started.
 
 ---
 
