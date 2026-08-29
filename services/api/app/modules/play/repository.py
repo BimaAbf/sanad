@@ -168,6 +168,20 @@ class PlayRepository:
             )
         ).first()
 
+    async def activity_attempt(self, *, session_id: UUID, idempotency_key: str) -> Any | None:
+        result = await self._session.execute(
+            text("""
+                SELECT a.id, a.child_id, a.session_id, a.activity_code, a.skill_id,
+                       a.modality::text AS modality, a.result::text AS result,
+                       a.prompt_level::text AS prompt_level, a.latency_ms,
+                       a.choice_count, a.client_ts
+                FROM attempts a
+                WHERE a.session_id = :session_id AND a.idempotency_key = :idempotency_key
+            """),
+            {"session_id": session_id, "idempotency_key": idempotency_key},
+        )
+        return result.first()
+
     async def record_session_end_event(
         self,
         *,
