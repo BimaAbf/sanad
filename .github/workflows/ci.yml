@@ -39,6 +39,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
@@ -139,6 +140,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - run: pnpm exec turbo run typecheck
       - run: pnpm exec turbo run test
@@ -170,6 +172,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - name: install playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -200,6 +203,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - run: pnpm --filter @sanad/web build
       # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
@@ -220,6 +224,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
@@ -237,14 +242,14 @@ jobs:
       # transitive dependency nobody can act on today; a HIGH in a built image
       # is something we are about to run as a service.
       - name: trivy (api)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: sanad-api:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
       - name: trivy (web)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: sanad-web:ci
           severity: HIGH,CRITICAL
@@ -279,6 +284,7 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
         env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
           pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
