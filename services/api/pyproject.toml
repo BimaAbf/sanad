@@ -22,6 +22,13 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.50b0",
     "opentelemetry-instrumentation-redis>=0.50b0",
     "aioboto3>=13.3.0",
+    "argon2-cffi>=23.1.0",
+    "pyjwt[crypto]>=2.10.1",
+    "phonenumbers>=8.13.52",
+    "pyyaml>=6.0.2",
+    # Windows ships no system tz database; Africa/Cairo must resolve everywhere
+    # the code runs, not only in the Linux container.
+    "tzdata>=2024.2",
 ]
 
 [dependency-groups]
@@ -35,6 +42,7 @@ dev = [
     "mypy>=1.14.0",
     "schemathesis>=3.38.0",
     "types-aioboto3>=13.3.0",
+    "types-pyyaml>=6.0.12",
 ]
 
 [build-system]
@@ -70,6 +78,13 @@ select = [
 ]
 ignore = [
     "S101",      # assert is fine in tests and in invariant checks
+    # RUF001/2/3 flag "ambiguous" Unicode -- every Arabic letter and every
+    # Arabic-Indic digit trips them. This product is Arabic-first; the rule is
+    # designed for codebases where non-Latin script is a smuggling vector, and
+    # here it is the subject matter.
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]

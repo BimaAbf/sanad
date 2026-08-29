@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import Field, PostgresDsn, RedisDsn, field_validator
+from pydantic import Field, PostgresDsn, RedisDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     s3_access_key_id: str = Field(...)
     s3_secret_access_key: str = Field(...)
 
+    # --- auth ---
+    # Peppers and keys have no defaults in production. Locally they fall back to
+    # a generated value so a developer never has to invent one, and `_check_
+    # production_secrets` refuses to start a production process without them.
+    otp_pepper: str = "local-dev-otp-pepper-not-a-secret"
+    jwt_private_key: str | None = None
+    jwt_public_key: str | None = None
+    # Not a credential: this is the placeholder _check_production_secrets rejects.
+    invite_secret: str = "local-dev-invite-secret-not-a-secret"  # noqa: S105
+    sms_provider: str = "null"
+
     # --- web ---
     # NoDecode: pydantic-settings would otherwise JSON-parse this env var
     # before the validator below gets to split it on commas.
@@ -82,6 +93,31 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self) -> Settings:
+        """A local-dev default must never silently become a production secret."""
+        if self.environment is not Environment.PRODUCTION:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("MISK_JWT_PRIVATE_KEY", self.jwt_private_key),
+                ("MISK_JWT_PUBLIC_KEY", self.jwt_public_key),
+            )
+            if not value
+        ]
+        for name, value in (
+            ("MISK_OTP_PEPPER", self.otp_pepper),
+            ("MISK_INVITE_SECRET", self.invite_secret),
+        ):
+            if value.startswith("local-dev-"):
+                missing.append(name)
+        if missing:
+            raise ValueError(
+                "these must be set explicitly in production: " + ", ".join(sorted(missing))
+            )
+        return self
 
     @property
     def is_production(self) -> bool:
