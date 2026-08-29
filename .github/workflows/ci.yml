@@ -37,7 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
 
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
 
@@ -135,7 +137,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - run: pnpm exec turbo run typecheck
       - run: pnpm exec turbo run test
       # NOT YET IMPLEMENTED: Storybook with an LTR and an RTL story per
@@ -164,7 +168,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - name: install playwright browsers
         run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/web
@@ -192,7 +198,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - run: pnpm --filter @sanad/web build
       # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
       # the budgets and `assertions` are set to `error`, so a regression fails
@@ -210,7 +218,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
       - name: pip-audit
@@ -227,14 +237,14 @@ jobs:
       # transitive dependency nobody can act on today; a HIGH in a built image
       # is something we are about to run as a service.
       - name: trivy (api)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: sanad-api:ci
           severity: HIGH,CRITICAL
           exit-code: "1"
           ignore-unfixed: true
       - name: trivy (web)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: sanad-web:ci
           severity: HIGH,CRITICAL
@@ -267,7 +277,9 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile --allow-build=esbuild --allow-build=sharp --allow-build=unrs-resolver
+      - run: pnpm install --frozen-lockfile
+        env:
+          pnpm_config_approve_builds: true
       - run: uv sync --all-extras
         working-directory: services/api
 
