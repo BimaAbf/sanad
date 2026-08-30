@@ -1,0 +1,306 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Values here are for the ephemeral CI services only. No real credential ever
+  # enters this file; secrets come from the repository secret store.
+  SANAD_ENVIRONMENT: ci
+  SANAD_DATABASE_URL: postgresql+asyncpg://sanad:sanad@localhost:5432/sanad
+  SANAD_REDIS_URL: redis://localhost:6379/0
+  SANAD_S3_ENDPOINT_URL: http://localhost:9000
+  SANAD_S3_REGION: us-east-1
+  SANAD_S3_BUCKET: sanad-media
+  SANAD_S3_ACCESS_KEY_ID: sanadminio
+  SANAD_S3_SECRET_ACCESS_KEY: sanadminio-dev-secret
+  # tests/conftest.py uses a separate database so `just test` never touches
+  # the data a developer is looking at in `just dev`.
+  SANAD_CORS_ORIGINS: http://localhost:3000
+
+jobs:
+  # ---------------------------------------------------------------- lint ----
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - run: uv sync --all-extras
+        working-directory: services/api
+
+      - name: ruff
+        run: uv run ruff check . && uv run ruff format --check .
+        working-directory: services/api
+      - name: mypy --strict
+        run: uv run mypy --strict app
+        working-directory: services/api
+      - name: eslint
+        run: pnpm exec turbo run lint
+      - name: stylelint (no physical properties)
+        run: pnpm run stylelint
+      - name: banned-terms-lint
+        run: python tools/lint/banned_terms.py
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------ test-api ----
+  test-api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: sanad
+          POSTGRES_PASSWORD: sanad
+          POSTGRES_DB: sanad
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sanad" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+
+      # MinIO needs a command argument, which GitHub `services:` cannot supply,
+      # so it runs as a step instead.
+      - name: start minio
+        run: |
+          docker run -d --name minio -p 9000:9000             -e MINIO_ROOT_USER=sanadminio             -e MINIO_ROOT_SECRET=sanadminio-dev-secret             -e MINIO_ROOT_PASSWORD=sanadminio-dev-secret             minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:9000/minio/health/live && break || sleep 2
+          done
+          docker run --rm --network host minio/mc:latest alias set local http://localhost:9000 sanadminio sanadminio-dev-secret
+          docker run --rm --network host minio/mc:latest mb --ignore-existing local/sanad-media
+          docker run --rm --network host minio/mc:latest mb --ignore-existing local/sanad-private
+
+      - run: uv sync --all-extras
+        working-directory: services/api
+      - name: create the test database
+        run: |
+          PGPASSWORD=sanad psql -h localhost -U sanad -d sanad             -c "CREATE DATABASE sanad_test OWNER sanad;"
+      - run: uv run alembic upgrade head
+        working-directory: services/api
+      - name: migrate the test database
+        run: uv run alembic upgrade head
+        working-directory: services/api
+        env:
+          SANAD_DATABASE_URL: postgresql+asyncpg://sanad:sanad@localhost:5432/sanad_test
+
+      - name: pytest
+        # 85% overall, and 100% BRANCH coverage on the deterministic core:
+        # domain/ computes every number a caregiver sees, and guardrails/ is
+        # what makes "AI may be more conservative, never less" true.
+        run: |
+          uv run pytest -m "not live_ai" --cov --cov-report=term-missing --cov-fail-under=85
+        working-directory: services/api
+      - name: branch coverage gate on domain + guardrails
+        run: uv run python ../../tools/lint/coverage_gate.py
+        working-directory: services/api
+      - name: repo tooling
+        # tools/ is outside the API package and its own coverage is irrelevant,
+        # but the pure halves of `just up` and the Nour recording-script builder
+        # decide what a developer is told and what a studio is handed. Kept in
+        # step with the same list in the justfile's `test` recipe.
+        run: |
+          uv run pytest ../../tools/dev/test_dev_runner.py ../../tools/voice_render/test_recording_script.py --no-cov
+        working-directory: services/api
+
+  # ------------------------------------------------------------ test-web ----
+  test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - run: pnpm exec turbo run typecheck
+      - run: pnpm exec turbo run test
+      # NOT YET IMPLEMENTED: Storybook with an LTR and an RTL story per
+      # component (docs/06 §8). The equivalent invariants that CAN be checked
+      # without a browser are covered by apps/web/src/lib/*.test.ts — contrast
+      # over the shipped stylesheet, touch-target arithmetic, the prompt
+      # ladder, the console role matrix. The RTL story requirement is a real
+      # gap and is recorded in PROGRESS.md, not silently dropped.
+
+  # ---------------------------------------------------------- contract -----
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --all-extras
+        working-directory: services/api
+      # TODO(P01): generate openapi.json, run schemathesis, diff packages/api-client.
+      - run: echo "contract checks activate with P01 (first real routes)"
+
+  # --------------------------------------------------------------- e2e -----
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - name: install playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: build
+        run: pnpm --filter @sanad/web build
+      # Playwright starts the app itself (see playwright.config.ts). The API is
+      # not required: every spec drives the client with the placeholder data the
+      # pages ship, which is what makes this job runnable before the API is
+      # deployed anywhere.
+      - name: playwright + axe-core
+        run: pnpm exec playwright test
+        working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  # -------------------------------------------------------------- perf -----
+  perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - run: pnpm --filter @sanad/web build
+      # Hard thresholds, not warnings (docs/06 §6). `.lighthouserc.json` carries
+      # the budgets and `assertions` are set to `error`, so a regression fails
+      # the job rather than printing a number nobody reads.
+      - name: lighthouse ci
+        run: pnpm exec lhci autorun
+        working-directory: apps/web
+
+  # ---------------------------------------------------------- security -----
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - run: uv sync --all-extras
+        working-directory: services/api
+      - name: pip-audit
+        run: uv run --with pip-audit pip-audit || true
+        working-directory: services/api
+      - name: pnpm audit
+        run: pnpm audit --audit-level high || true
+
+      - name: build the api image
+        run: docker build -t sanad-api:ci services/api
+      - name: build the web image
+        run: docker build -f apps/web/Dockerfile -t sanad-web:ci .
+      # A HARD fail, unlike the two audits above. An audit finding is usually a
+      # transitive dependency nobody can act on today; a HIGH in a built image
+      # is something we are about to run as a service.
+      - name: trivy (api)
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: sanad-api:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: trivy (web)
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: sanad-web:ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+
+  # ------------------------------------------------------------- evals -----
+  evals:
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ai-change')
+    steps:
+      - uses: actions/checkout@v4
+      # TODO(P03/P05/P08): Batch API run per provider, post the diff table.
+      - run: echo "evals activate with P03"
+
+  # ------------------------------------------------------------ guards -----
+  # Five project-specific checks. Each prevents a class of bug that normal
+  # testing misses. test_guards.py proves each one fires on a violation
+  # fixture, so a guard that silently matches nothing cannot look like a pass.
+  #
+  # The fifth — destructive-migration — was added in P15. Migrations run before
+  # the new tasks start, so during the bake the OLD code serves traffic against
+  # the NEW schema; a DROP COLUMN is a 500 on every request that touches the
+  # table, from a deploy that has not technically failed.
+  guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+        env:
+          COREPACK_ENABLE_PROJECT_SPEC: 0
+      - run: uv sync --all-extras
+        working-directory: services/api
+
+      - name: guards fire on their violation fixtures
+        run: uv run pytest ../../tools/guards/test_guards.py -v
+        working-directory: services/api
+
+      - name: route-authorisation
+        run: uv run python ../../tools/guards/route_authorisation.py
+        working-directory: services/api
+      - name: single-anthropic-client
+        run: uv run python ../../tools/guards/single_anthropic_client.py
+        working-directory: services/api
+      - name: prompt-cache-hit
+        run: uv run python ../../tools/guards/prompt_cache_hit.py
+        working-directory: services/api
+      - name: required-guardrail-layer
+        run: uv run python ../../tools/guards/required_guardrail_layer.py
+        working-directory: services/api
+      - name: destructive-migration
+        run: uv run python ../../tools/guards/destructive_migration.py
+        working-directory: services/api
+        env:
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}

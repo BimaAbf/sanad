@@ -1,0 +1,14 @@
+"""VIOLATION FIXTURE — a destructive migration with no label.
+
+Not a real migration. It exists so that tools/guards/test_guards.py can prove
+`destructive_migration.py` fires, rather than proving only that it is quiet.
+"""
+
+
+def upgrade() -> None:
+    op.execute("ALTER TABLE children DROP COLUMN diagnosis_note")
+    op.drop_index("events_child_ts")
+
+
+def downgrade() -> None:
+    op.execute("ALTER TABLE children ADD COLUMN diagnosis_note text")

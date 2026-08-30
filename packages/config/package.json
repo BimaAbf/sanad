@@ -1,0 +1,22 @@
+{
+  "name": "@sanad/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.config.js",
+    "./tailwind": "./tailwind-preset.js",
+    "./stylelint": "./stylelint.config.js",
+    "./tsconfig/base": "./tsconfig.base.json",
+    "./tsconfig/next": "./tsconfig.next.json"
+  },
+  "files": ["*.js", "*.json"],
+  "devDependencies": {
+    "@eslint/js": "9.17.0",
+    "eslint": "9.17.0",
+    "eslint-config-next": "15.1.3",
+    "stylelint": "16.12.0",
+    "stylelint-config-standard": "36.0.1",
+    "typescript-eslint": "8.19.0"
+  }
+}

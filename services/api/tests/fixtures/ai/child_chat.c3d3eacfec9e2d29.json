@@ -1,0 +1,12 @@
+{
+  "content": {
+    "phrase_id": "encourage_try"
+  },
+  "id": "chatcmpl-dfe80432-c32a-4da8-94e9-ea5a959eaebc",
+  "stop_reason": "stop",
+  "usage": {
+    "completion_tokens": 52,
+    "prompt_tokens": 342,
+    "total_tokens": 394
+  }
+}

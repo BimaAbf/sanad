@@ -1,0 +1,222 @@
+"""Operational CLI: `just seed`, `just eval`.
+
+Both subcommands refuse loudly rather than pretending to succeed.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import datetime as dt
+import json
+import sys
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+UPSERT_SKILL = """
+    INSERT INTO skills (
+        code, category, label_ar, label_vowelised, label_egy, transliteration,
+        phonemes, difficulty_tier, intro_order, alt_text_ar, colour,
+        distractor_pool, prerequisites
+    ) VALUES (
+        :code, CAST(:category AS skill_category), :label_ar, :label_vowelised,
+        :label_egy, :transliteration, :phonemes, :difficulty_tier, :intro_order,
+        :alt_text_ar, CAST(:colour AS jsonb), CAST(:distractor_pool AS jsonb),
+        CAST(:prerequisites AS jsonb)
+    )
+    ON CONFLICT (code) DO UPDATE SET
+        category        = EXCLUDED.category,
+        label_ar        = EXCLUDED.label_ar,
+        label_vowelised = EXCLUDED.label_vowelised,
+        label_egy       = EXCLUDED.label_egy,
+        transliteration = EXCLUDED.transliteration,
+        phonemes        = EXCLUDED.phonemes,
+        difficulty_tier = EXCLUDED.difficulty_tier,
+        intro_order     = EXCLUDED.intro_order,
+        alt_text_ar     = EXCLUDED.alt_text_ar,
+        colour          = EXCLUDED.colour,
+        distractor_pool = EXCLUDED.distractor_pool,
+        prerequisites   = EXCLUDED.prerequisites,
+        updated_at      = now()
+"""
+
+
+async def _seed_curriculum() -> int:
+    """Load `seeds/curriculum.py` into `skills`.
+
+    An upsert on `code`, so running it twice is a no-op and a curriculum edit is
+    picked up without a truncate. It never touches `skill_states`: those belong
+    to a child, and a reseed must not reset a child's progress.
+    """
+    from sqlalchemy import text
+
+    from app.core.config import get_settings
+    from app.core.db import init_engine
+
+    try:
+        from seeds.curriculum import REVIEWED_BY, build_skills
+    except ModuleNotFoundError:
+        print(
+            "seed: cannot import seeds.curriculum.\n  Run it from services/api (`just seed` does).",
+            file=sys.stderr,
+        )
+        return 1
+
+    skills = build_skills()
+    engine = init_engine(get_settings())
+    async with engine.begin() as conn:
+        for skill in skills:
+            await conn.execute(
+                text(UPSERT_SKILL),
+                {
+                    "code": skill.code,
+                    "category": skill.category,
+                    "label_ar": skill.label_ar,
+                    "label_vowelised": skill.label_vowelised,
+                    "label_egy": skill.label_egy,
+                    "transliteration": skill.transliteration,
+                    "phonemes": skill.phonemes,
+                    "difficulty_tier": skill.difficulty_tier,
+                    "intro_order": skill.intro_order,
+                    "alt_text_ar": skill.alt_text_ar,
+                    "colour": json.dumps(skill.colour) if skill.colour else None,
+                    "distractor_pool": json.dumps(list(skill.distractor_pool)),
+                    "prerequisites": json.dumps(list(skill.prerequisites)),
+                },
+            )
+    await engine.dispose()
+
+    print(f"seed: {len(skills)} skills upserted into `skills`.")
+    if not REVIEWED_BY:
+        # Loud, and not fatal: local development needs the rows. What must not
+        # happen is a family seeing these labels, and that is gated elsewhere.
+        print(
+            "seed: WARNING — seeds/curriculum.py REVIEWED_BY is empty.\n"
+            "  Every vowelisation, phoneme string and distractor pool just\n"
+            "  loaded is a mechanically generated PLACEHOLDER. Not for any\n"
+            "  child. See REVIEW-QUEUE.md #6.",
+            file=sys.stderr,
+        )
+    return 0
+
+
+def _seed(_args: argparse.Namespace) -> int:
+    return asyncio.run(_seed_curriculum())
+
+
+async def _seed_demo_family() -> int:
+    """One caregiver and three children with genuinely different histories.
+
+    Refuses in production. A demo child in a production database is
+    indistinguishable from a real one to every query in the product, including
+    the ones that count how many children it has.
+    """
+    from app.core.config import get_settings
+    from app.core.db import dispose_engine, init_engine
+
+    settings = get_settings()
+    if str(settings.environment) == "production":
+        print(
+            "seed-demo: refusing to run against SANAD_ENVIRONMENT=production."
+            " These are fictional children and every query in the product"
+            " would count them as real ones.",
+            file=sys.stderr,
+        )
+        return 1
+
+    from seeds.demo_loader import load
+
+    engine = init_engine(settings)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            summary = await load(session)
+            await session.commit()
+    finally:
+        await dispose_engine()
+
+    print(f"seed-demo: caregiver {summary['caregiver']}")
+    for child in summary["children"]:
+        print(
+            f"  {child['name']:<8} {child['id']}  "
+            f"{child['skills_seeded']} skills seeded, "
+            f"{child['attempts']} attempts, {child['stars']} stars"
+        )
+    print("seed-demo: sign in with that phone; any OTP the API prints will do.")
+    return 0
+
+
+def _seed_demo(_args: argparse.Namespace) -> int:
+    return asyncio.run(_seed_demo_family())
+
+
+def _eval(_args: argparse.Namespace) -> int:
+    print(
+        "eval: no eval suites yet.\n"
+        "  The runner and the golden datasets land with P03 (gateway) and\n"
+        "  docs/10. Do not stub a passing result here.",
+        file=sys.stderr,
+    )
+    return 1
+
+
+async def _run_worker(name: str) -> int:
+    """One cron job, by name. The entrypoint a scheduler actually invokes.
+
+    A process per job rather than a resident scheduler: the cadences live in
+    `workers/schedule.py` as Cairo local times, and letting the platform's own
+    cron own the clock means the DST conversion is applied by
+    `schedule.utc_hour_for` at deploy time instead of by a long-running process
+    that was started in January and is now an hour wrong.
+    """
+    from app.core.config import get_settings
+    from app.core.db import dispose_engine, init_engine
+    from app.workers.jobs import run_job, unbuilt_jobs
+
+    engine = init_engine(get_settings())
+    now = dt.datetime.now(dt.UTC)
+    try:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            result = await run_job(session, name, now=now)
+    except KeyError as refusal:
+        print(f"worker: {refusal.args[0]}", file=sys.stderr)
+        print(f"worker: unbuilt jobs are {', '.join(unbuilt_jobs())}", file=sys.stderr)
+        return 1
+    finally:
+        await dispose_engine()
+
+    print(f"worker: {name} ok — {result}")
+    return 0
+
+
+def _worker(args: argparse.Namespace) -> int:
+    return asyncio.run(_run_worker(args.job))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="sanad")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("seed", help="load seed data").set_defaults(run=_seed)
+    sub.add_parser("eval", help="run the AI eval suites").set_defaults(run=_eval)
+    sub.add_parser("seed-demo", help="load the demo caregiver and three children").set_defaults(
+        run=_seed_demo
+    )
+
+    worker = sub.add_parser("worker", help="run one scheduled job by name")
+    worker.add_argument("job", help="a name from app.workers.schedule.JOBS")
+    worker.set_defaults(run=_worker)
+
+    # Imported here rather than at module scope: `sanad seed` runs in the
+    # migration job, and pulling the graphs, the retriever and langgraph in for
+    # a command that writes 88 rows would be a slower container start for no
+    # reason.
+    from app.ai.inspect import register as register_rag
+
+    register_rag(sub)
+
+    args = parser.parse_args(argv)
+    result: int = args.run(args)
+    return result
+
+
+if __name__ == "__main__":
+    sys.exit(main())

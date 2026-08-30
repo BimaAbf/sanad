@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "docs/06 §6: 'Lighthouse CI runs on every PR with these as failure thresholds,",
+    "not warnings.' Every assertion below is `error` for that reason.",
+    "",
+    "The child app has a LOOSER LCP budget (2200ms vs 1800ms) and a TIGHTER CLS",
+    "budget (0.01 vs 0.05) than the caregiver app. That is not inconsistent: the",
+    "child app preloads a whole session before the first prompt, which costs",
+    "load time and buys an uninterruptible session — while a layout shift under",
+    "a finger that is already moving toward a picture is the worst thing that",
+    "can happen on that screen.",
+    "",
+    "NEVER EXECUTED. lhci has not been run on this machine and CI has not run at",
+    "all. The budgets are transcribed from docs/06 §6, not measured."
+  ],
+  "ci": {
+    "collect": {
+      "startServerCommand": "pnpm start",
+      "startServerReadyPattern": "Ready in",
+      "url": [
+        "http://localhost:3000/home",
+        "http://localhost:3000/onboarding",
+        "http://localhost:3000/assessment/placeholder",
+        "http://localhost:3000/play"
+      ],
+      "numberOfRuns": 3,
+      "settings": {
+        "preset": "desktop",
+        "throttlingMethod": "simulate",
+        "throttling": {
+          "_comment": "Moto G4 over 4G, per docs/06 §6.",
+          "rttMs": 150,
+          "throughputKbps": 1638,
+          "cpuSlowdownMultiplier": 4
+        }
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:accessibility": ["error", { "minScore": 1 }],
+        "categories:performance": ["error", { "minScore": 0.9 }],
+        "largest-contentful-paint": ["error", { "maxNumericValue": 2200 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.05 }],
+        "interaction-to-next-paint": ["error", { "maxNumericValue": 200 }],
+        "total-byte-weight": ["error", { "maxNumericValue": 1048576 }],
+        "resource-summary:script:size": ["error", { "maxNumericValue": 225280 }],
+        "resource-summary:font:size": ["error", { "maxNumericValue": 45056 }],
+        "uses-responsive-images": "off",
+        "unused-javascript": "off"
+      }
+    },
+    "upload": { "target": "filesystem", "outputDir": "./lighthouse-report" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "content": {
+    "answer_ar": "طفلك إتقن اللون الأصفر، وبيدرب على اللون الأزرق. اللون الأحمر محتاج مراجعة – جربته كتير لكن محتاجين نرجعه قريب. اليوم جربوا يلاقوا 5 حاجات حمرا ويسموهم مع بعض.",
+    "used_document_ids": []
+  },
+  "id": "chatcmpl-24cf0d24-82cd-4b4b-8ca7-8d8171ef1a8e",
+  "stop_reason": "stop",
+  "usage": {
+    "completion_tokens": 424,
+    "prompt_tokens": 825,
+    "total_tokens": 1249
+  }
+}

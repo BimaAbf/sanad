@@ -1,0 +1,7 @@
+/* CONTROL FIXTURE — this file must PASS stylelint. */
+.compliant {
+  margin-inline-start: 4px;
+  padding-inline-end: 8px;
+  inset-inline-start: 0;
+  text-align: end;
+}

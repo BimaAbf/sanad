@@ -1,0 +1,15 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  # services/api is a Python service; it carries a package.json only so
+  # Turborepo can run it in the same `dev` graph as the web app.
+  - "services/*"
+
+# Build scripts are opt-in (pnpm 11: the `allowBuilds` map — the v10
+# `onlyBuiltDependencies` list is legacy). These three ship native binaries
+# the toolchain genuinely needs; nothing else is permitted to run a
+# postinstall.
+allowBuilds:
+  esbuild: true
+  sharp: true
+  unrs-resolver: true

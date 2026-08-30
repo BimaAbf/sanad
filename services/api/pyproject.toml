@@ -1,0 +1,170 @@
+[project]
+name = "sanad-api"
+version = "0.1.0"
+description = "Sanad API - Arabic-first learning and developmental tracking for children with Down syndrome"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.6",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.4",
+    "pydantic-settings>=2.7.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "redis>=5.2.1",
+    "structlog>=24.4.0",
+    "arq>=0.26.3",
+    "pgvector>=0.3.6",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.50b0",
+    "opentelemetry-instrumentation-redis>=0.50b0",
+    "aioboto3>=13.3.0",
+    "argon2-cffi>=23.1.0",
+    "pyjwt[crypto]>=2.10.1",
+    "phonenumbers>=8.13.52",
+    # POST /voice/attempt is multipart: FastAPI refuses to build a Form route
+    # without this, and the failure is at import time, not at request time.
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0.2",
+    # Windows ships no system tz database; Africa/Cairo must resolve everywhere
+    # the code runs, not only in the Linux container.
+    "tzdata>=2024.2",
+    # The single provider SDK. Only app/ai/gateway.py may construct a client
+    # from it; tools/guards/single_anthropic_client.py enforces that.
+    "anthropic>=0.69",
+    # The ASR transport speaks Groq's OpenAI-compatible endpoint over plain
+    # HTTP rather than the Groq SDK, so the voice module never gains a provider
+    # client -- docs/04d §5 keeps that path away from the gateway entirely.
+    "httpx>=0.28.1",
+    # Orchestration. LangGraph drives the two stateful graphs (recommendation,
+    # chat); langchain-core supplies the Runnable/Retriever interfaces the
+    # gateway adapter implements. Deliberately NOT `langchain-groq` or
+    # `langchain-anthropic`: either would construct a provider client outside
+    # app/ai/gateway.py, which tools/guards/single_anthropic_client.py forbids
+    # and which would bypass redaction, guardrails and the budget check.
+    "langchain-core>=1.0",
+    "langgraph>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "hypothesis>=6.122.3",
+    "httpx>=0.28.1",
+    "ruff>=0.8.4",
+    "mypy>=1.14.0",
+    "schemathesis>=3.38.0",
+    "types-aioboto3>=13.3.0",
+    "types-pyyaml>=6.0.12",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# ---------------------------------------------------------------- ruff ------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # isort
+    "N",         # pep8-naming
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "A",         # builtins shadowing
+    "C4",        # comprehensions
+    "DTZ",       # naive datetimes
+    "T20",       # flake8-print  -- no print(); structlog only
+    "SIM",       # simplify
+    "RUF",
+    "ASYNC",
+    "S",         # bandit
+    "BLE",       # blind except -- allowed only with a written justification
+]
+ignore = [
+    "S101",      # assert is fine in tests and in invariant checks
+    # RUF001/2/3 flag "ambiguous" Unicode -- every Arabic letter and every
+    # Arabic-Indic digit trips them. This product is Arabic-first; the rule is
+    # designed for codebases where non-Latin script is a smuggling vector, and
+    # here it is the subject matter.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S105 stays ON in tests: a hard-coded credential-shaped string must carry an
+# explicit noqa saying why it is safe.
+"tests/**" = ["S106", "S311"]
+"migrations/**" = ["N999", "E501"]
+# ProblemDetail is the RFC 9457 term; renaming it to ProblemDetailError would
+# make the code harder to match against the spec, not easier.
+"app/core/errors.py" = ["N818"]
+# GuardrailRejection / GuardrailBlock read as what they are; a "...Error" suffix
+# would obscure that one is recoverable and the other is not.
+"app/guardrails/layers.py" = ["N818"]
+# AudioRejected / UnvowelisedText / AsrUnavailable / NotificationRejected name
+# the CONDITION, which is what the call sites read as. "AudioRejectedError"
+# would say the rejection is an error; it is the normal, expected outcome of
+# validating an upload from a phone in a noisy room.
+"app/modules/voice/domain/audio.py" = ["N818"]
+"app/modules/voice/domain/ssml.py" = ["N818"]
+"app/modules/voice/providers.py" = ["N818"]
+"app/modules/notifications/domain/policy.py" = ["N818"]
+# These tests inspect the temp directory and the object store on purpose: the
+# assertion IS that a child's audio is gone from both. ASYNC240 and S108 are
+# about production code reaching for blocking IO and /tmp; here the blocking
+# call is the check itself.
+"tests/unit/test_voice_service.py" = ["ASYNC240", "S108"]
+# A CLI writes to stdout; that is its interface, not a stray debug print.
+"app/cli.py" = ["T201"]
+# `sanad rag` is a terminal diagnostic. Its entire output is print, and
+# routing it through structlog would render the Arabic as escaped JSON --
+# unreadable for the one thing the tool exists to let a human read.
+"app/ai/inspect.py" = ["T201"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+# ---------------------------------------------------------------- mypy ------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["^migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["aioboto3.*", "arq.*", "pgvector.*"]
+ignore_missing_imports = true
+
+# -------------------------------------------------------------- pytest ------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "live_ai: hits a real model provider; excluded from CI by default",
+    "integration: needs the docker-compose stack",
+]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+omit = ["app/cli.py", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]
